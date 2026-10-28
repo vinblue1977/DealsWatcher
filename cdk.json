@@ -18,6 +18,7 @@
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/aws-iam:minimizePolicies": true,
     "@aws-cdk/core:enablePartitionLiterals": true,
-    "githubRepo": "vinblue1977@13391763/DealsWatcher@1437129114"
+    "githubRepo": "vinblue1977@13391763/DealsWatcher@1437129114",
+    "vapidPublicKey": "BADcPvTYdmWLfScHXVvIGJTbzCtHUbZNLvmotbNrsJwSAqS4Mc8f6tfJi5fBw4DMTQdNkQkYKkZ4SFh1iIlEeVs"
   }
 }
