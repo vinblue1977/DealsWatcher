@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Add watch</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button,input{font-family:inherit}
+</style>
+</helmet>
+<div style="--bg:#0B0D10;--surface:#14181D;--surface2:#1C2128;--line:#262C34;--text:#ECEEF1;--muted:#98A1AD;--accent:#FFB224;--good:#3DD68C;width:390px;height:844px;box-sizing:border-box;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',Inter,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <div style="flex:1;min-height:0;padding:56px 20px 0;display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <a href="Main.dc.html" style="min-height:44px;display:inline-flex;align-items:center;color:var(--accent);font-size:16px;font-weight:500">Cancel</a>
+      <h1 style="margin:0;font-size:17px;font-weight:600">Add watch</h1>
+      <span style="width:56px"></span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <label for="url" style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em">Product link</label>
+      <div style="display:flex;gap:8px">
+        <input id="url" type="url" value="https://www.target.com/p/apple-airpods-pro-3" style="flex:1;min-width:0;box-sizing:border-box;height:48px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:15px">
+        <button type="button" style="flex:none;height:48px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font-size:15px;font-weight:600">Paste</button>
+      </div>
+      <div style="font-size:13px;color:var(--muted)">Works with Best Buy, Target and Walmart links. Amazon is not supported yet.</div>
+    </div>
+
+    <div style="display:flex;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px;align-items:center">
+      <div style="width:48px;height:48px;border-radius:12px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--muted);flex:none">T</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:600">Apple AirPods Pro 3</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3DD68C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Found at Target</div>
+      </div>
+      <div style="font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;flex:none">$229.00</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <label for="target" style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em">Alert me at or below</label>
+      <div style="display:flex;align-items:center;height:56px;padding:0 14px;border-radius:12px;border:1px solid var(--accent);background:var(--surface)">
+        <span style="font-size:22px;color:var(--muted);margin-right:4px">$</span>
+        <input id="target" inputmode="decimal" value="199.00" style="flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--text);font-size:22px;font-weight:700;font-variant-numeric:tabular-nums">
+      </div>
+      <div style="display:flex;gap:8px">
+        <span style="min-height:40px;box-sizing:border-box;padding:0 14px;border-radius:20px;background:var(--surface2);font-size:14px;display:inline-flex;align-items:center">−10% · $206</span>
+        <span style="min-height:40px;box-sizing:border-box;padding:0 14px;border-radius:20px;background:var(--surface2);font-size:14px;display:inline-flex;align-items:center">−15% · $195</span>
+        <span style="min-height:40px;box-sizing:border-box;padding:0 14px;border-radius:20px;background:var(--surface2);font-size:14px;display:inline-flex;align-items:center">−20% · $183</span>
+      </div>
+    </div>
+
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;min-height:56px;padding:0 14px;gap:12px">
+        <span style="font-size:15px">Also alert on drops of 10% or more</span>
+        <button role="switch" aria-checked="true" aria-label="Alert on drops of 10% or more" style="flex:none;width:51px;height:31px;border-radius:16px;border:0;background:var(--good);position:relative;padding:0"><span style="position:absolute;top:2px;right:2px;width:27px;height:27px;border-radius:14px;background:#fff"></span></button>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:none;padding:12px 20px 34px;background:var(--bg)">
+    <a href="Main.dc.html" style="display:flex;align-items:center;justify-content:center;height:54px;border-radius:14px;background:var(--accent);color:#1A1204;font-size:17px;font-weight:700">Start watching</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

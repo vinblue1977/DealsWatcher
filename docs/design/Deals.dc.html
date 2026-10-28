@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deals feed</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+</style>
+</helmet>
+<div style="--bg:#0B0D10;--surface:#14181D;--surface2:#1C2128;--line:#262C34;--text:#ECEEF1;--muted:#98A1AD;--accent:#FFB224;--good:#3DD68C;width:390px;height:844px;box-sizing:border-box;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',Inter,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <div style="flex:1;min-height:0;padding:64px 20px 0;display:flex;flex-direction:column;gap:14px">
+    <div>
+      <h1 style="margin:0;font-size:34px;line-height:40px;font-weight:700;letter-spacing:-0.02em">Deals</h1>
+      <div style="font-size:14px;color:var(--muted);margin-top:2px">Matches for your 4 keywords · updated 3 min ago</div>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <span style="min-height:40px;box-sizing:border-box;padding:0 14px;border-radius:20px;background:var(--accent);color:#1A1204;font-size:14px;font-weight:600;display:inline-flex;align-items:center">All</span>
+      <span style="min-height:40px;box-sizing:border-box;padding:0 14px;border-radius:20px;background:var(--surface2);font-size:14px;display:inline-flex;align-items:center">Slickdeals</span>
+      <span style="min-height:40px;box-sizing:border-box;padding:0 14px;border-radius:20px;background:var(--surface2);font-size:14px;display:inline-flex;align-items:center">Reddit</span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <a href="https://slickdeals.net" style="display:block;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+          <div style="font-size:15px;font-weight:600;line-height:20px;display:flex;gap:8px"><span style="flex:none;width:8px;height:8px;border-radius:4px;background:var(--accent);margin-top:6px" aria-label="New"></span>Samsung 65″ S90D OLED 4K Smart TV</div>
+          <div style="flex:none;font-size:17px;font-weight:700;color:var(--good);font-variant-numeric:tabular-nums">$1,099</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--muted)">
+          <span style="padding:3px 8px;border-radius:999px;background:var(--surface2);color:var(--text);font-weight:600">OLED</span>
+          <span>Slickdeals · 12 min ago</span>
+        </div>
+      </a>
+
+      <a href="https://reddit.com/r/buildapcsales" style="display:block;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+          <div style="font-size:15px;font-weight:600;line-height:20px;display:flex;gap:8px"><span style="flex:none;width:8px;height:8px;border-radius:4px;background:var(--accent);margin-top:6px" aria-label="New"></span>Sony WH-1000XM6 headphones, $50 off at Best Buy</div>
+          <div style="flex:none;font-size:17px;font-weight:700;color:var(--good);font-variant-numeric:tabular-nums">$399</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--muted)">
+          <span style="padding:3px 8px;border-radius:999px;background:var(--surface2);color:var(--text);font-weight:600">Sony</span>
+          <span>r/deals · 41 min ago</span>
+        </div>
+      </a>
+
+      <a href="https://slickdeals.net" style="display:block;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+          <div style="font-size:15px;font-weight:600;line-height:20px;padding-left:16px">AirPods Pro 3 with MagSafe case, lowest price yet</div>
+          <div style="flex:none;font-size:17px;font-weight:700;color:var(--good);font-variant-numeric:tabular-nums">$219</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--muted);padding-left:16px">
+          <span style="padding:3px 8px;border-radius:999px;background:var(--surface2);color:var(--text);font-weight:600">AirPods</span>
+          <span>Slickdeals · 2 h ago</span>
+        </div>
+      </a>
+
+      <a href="https://reddit.com/r/deals" style="display:block;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+          <div style="font-size:15px;font-weight:600;line-height:20px;padding-left:16px">Dyson V15 Detect + Hair attachment, 28% off</div>
+          <div style="flex:none;font-size:17px;font-weight:700;color:var(--good);font-variant-numeric:tabular-nums">$469</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--muted);padding-left:16px">
+          <span style="padding:3px 8px;border-radius:999px;background:var(--surface2);color:var(--text);font-weight:600">Dyson</span>
+          <span>r/deals · 5 h ago</span>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <nav aria-label="Main" style="flex:none;height:84px;box-sizing:border-box;padding:8px 8px 0;background:var(--surface);border-top:1px solid var(--line);display:flex;position:relative">
+    <a href="Main.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:500;padding-top:4px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Watching</a>
+    <a href="Deals.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--accent);font-size:11px;font-weight:600;padding-top:4px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>Deals</a>
+    <a href="Keywords.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:500;padding-top:4px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg>Keywords</a>
+    <a href="Settings.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:500;padding-top:4px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>Settings</a>
+    <div style="position:absolute;left:128px;bottom:8px;width:134px;height:5px;border-radius:3px;background:rgba(236,238,241,0.4)"></div>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
