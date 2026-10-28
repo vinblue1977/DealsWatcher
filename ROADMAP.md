@@ -10,9 +10,9 @@ Cost target ≈ $0.10–0.50/month (AWS Budget alert as a cap).
 ## Next
 
 - [ ] Phase 2: AWS foundation (table, GitHub OIDC deploy role) and CI deploy jobs; VAPID key created in SSM by hand. Cost budgets already exist account-wide ($5, alerts at 80% and 100%); the alert email topic arrives with the first Lambda
-- [ ] Phase 3: hosting, passkey sign-in, API
+- [ ] Phase 3: hosting, passkey sign-in (365-day session), API, app sign-in code. No alarms or alert email yet
 - [ ] Phase 4: PWA shell + push
-- [ ] Phase 5: price checker (Best Buy first; then best-effort Target, Walmart, Tennis Warehouse, Costco). Before starting, test real product pages for Tennis Warehouse and Costco, ideally from AWS
+- [ ] Phase 5: alert email topic + one crash alarm per checker (each alarm past the account's free 10 costs ~$0.10/month); price checker (Best Buy first; then best-effort Target, Walmart, Tennis Warehouse, Costco). Before starting, test real product pages for Tennis Warehouse and Costco, ideally from AWS
 - [ ] Phase 6: feed checker (Slickdeals, Dealnews `dealnews.com/?rss=1`, Reddit r/deals and r/buildapcsales)
 - [ ] Phase 7: Black Friday polish
 

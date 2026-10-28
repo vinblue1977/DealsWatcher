@@ -14,6 +14,9 @@ from infra.stack import DealsWatcherStack
 REPO = "test-owner@1/test-repo@2"
 # The same feature flags as a real synth, so tests render the template the way a deploy does.
 CDK_CONTEXT = {k: v for k, v in json.loads(Path("cdk.json").read_text())["context"].items() if k.startswith("@")}
+# Stand-ins, so tests need neither a frontend build nor the built Lambda layer.
+CDK_CONTEXT["siteDir"] = "tests/fixtures/site"
+CDK_CONTEXT["layerDir"] = "tests/fixtures/layer"
 
 
 def _stack(context: dict | None = None, account: str | None = "123456789012") -> DealsWatcherStack:
@@ -111,3 +114,50 @@ def test_no_deploy_role_without_repo() -> None:
 def test_rejects_malformed_repo() -> None:
     with pytest.raises(ValueError, match="githubRepo"):
         _stack({"githubRepo": "not a repo"})
+
+
+TAGGABLE = {
+    "AWS::DynamoDB::GlobalTable",
+    "AWS::IAM::Role",
+    "AWS::S3::Bucket",
+    "AWS::Lambda::Function",
+    "AWS::Logs::LogGroup",
+    "AWS::CloudFront::Distribution",
+    "AWS::Cognito::UserPool",
+    "AWS::ApiGatewayV2::Api",
+    "AWS::ApiGatewayV2::Stage",
+}
+
+
+def _has_project_tag(node: object) -> bool:
+    """Tags appear as [{Key, Value}] lists, or as {project: ...} maps (API Gateway, Cognito)."""
+    if isinstance(node, dict):
+        for key in ("Tags", "UserPoolTags"):
+            tags = node.get(key)
+            if isinstance(tags, list) and {"Key": "project", "Value": "deals-watcher"} in tags:
+                return True
+            if isinstance(tags, dict) and tags.get("project") == "deals-watcher":
+                return True
+        return any(map(_has_project_tag, node.values()))
+    if isinstance(node, list):
+        return any(map(_has_project_tag, node))
+    return False
+
+
+def test_every_taggable_resource_has_the_project_tag() -> None:
+    resources = _template({"githubRepo": REPO}).to_json()["Resources"]
+    assert TAGGABLE <= {r["Type"] for r in resources.values()}, "extend TAGGABLE when the stack gains a resource type"
+    untagged = [name for name, r in resources.items() if r["Type"] in TAGGABLE and not _has_project_tag(r["Properties"])]
+    assert untagged == []
+
+
+def test_the_web_push_public_key_is_configured_so_the_app_can_subscribe() -> None:
+    key = json.loads(Path("cdk.json").read_text())["context"]["vapidPublicKey"]
+    assert len(key) == 87 and key.startswith("B")  # an uncompressed P-256 point, base64url
+
+
+def test_no_alarms_or_alert_topic_yet() -> None:
+    # Each alarm beyond the account's free 10 costs money; alarms arrive with the checkers (Phases 5 and 6).
+    template = _template()
+    template.resource_count_is("AWS::CloudWatch::Alarm", 0)
+    template.resource_count_is("AWS::SNS::Topic", 0)

@@ -19,6 +19,5 @@ DealsWatcherStack(
     termination_protection=True,
     description="iPhone-first deal watcher: price targets and deal-feed keywords with push alerts",
 )
-cdk.Tags.of(app).add("project", "deals-watcher")
 cdk.Aspects.of(app).add(AwsSolutionsChecks(verbose=True))
 app.synth()
