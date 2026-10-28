@@ -14,6 +14,9 @@ from infra.stack import DealsWatcherStack
 REPO = "test-owner@1/test-repo@2"
 # The same feature flags as a real synth, so tests render the template the way a deploy does.
 CDK_CONTEXT = {k: v for k, v in json.loads(Path("cdk.json").read_text())["context"].items() if k.startswith("@")}
+# Stand-ins, so tests need neither a frontend build nor the built Lambda layer.
+CDK_CONTEXT["siteDir"] = "tests/fixtures/site"
+CDK_CONTEXT["layerDir"] = "tests/fixtures/layer"
 
 
 def _stack(context: dict | None = None, account: str | None = "123456789012") -> DealsWatcherStack:
