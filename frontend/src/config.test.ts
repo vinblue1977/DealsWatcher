@@ -41,6 +41,16 @@ describe('loadConfig', () => {
     await expect(loadConfig()).rejects.toThrow('App settings are missing');
   });
 
+  it('reports missing settings when the file holds JSON null', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('null')));
+    await expect(loadConfig()).rejects.toThrow('App settings are missing');
+  });
+
+  it('reports missing settings when a required one is empty', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...CONFIG, clientId: '' }))));
+    await expect(loadConfig()).rejects.toThrow('App settings are missing');
+  });
+
   it('works with blocked storage', async () => {
     vi.stubGlobal('localStorage', {
       getItem: () => {
