@@ -27,3 +27,8 @@ frontend/dist/
 data/
 
 .DS_Store
+
+# Claude Code agent worktrees
+.claude/worktrees/
+
+*.bak
