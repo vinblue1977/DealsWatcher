@@ -108,17 +108,6 @@ def test_no_deploy_role_without_repo() -> None:
     _template({}).resource_properties_count_is("AWS::IAM::Role", web_identity, 0)
 
 
-def test_alert_email_and_budget_only_with_an_address() -> None:
-    template = _template({"alertEmail": "alerts@example.com"})
-    template.has_resource_properties("AWS::SNS::Subscription", {"Protocol": "email", "Endpoint": "alerts@example.com"})
-    template.has_resource_properties(
-        "AWS::Budgets::Budget", {"Budget": Match.object_like({"BudgetLimit": {"Amount": 5, "Unit": "USD"}})}
-    )
-    bare = _template({})
-    bare.resource_count_is("AWS::Budgets::Budget", 0)
-    bare.resource_count_is("AWS::SNS::Subscription", 0)
-
-
 def test_rejects_malformed_repo() -> None:
     with pytest.raises(ValueError, match="githubRepo"):
         _stack({"githubRepo": "not a repo"})

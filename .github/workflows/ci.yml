@@ -278,11 +278,8 @@ jobs:
           mask-aws-account-id: true  # public repo: logs are public
       - name: Deploy
         run: |
-          : "${ALERT_EMAIL:?set the ALERT_EMAIL secret}"  # a missing secret would silently drop failure emails
           . .venv/bin/activate
-          npx --no-install cdk deploy --require-approval never -c alertEmail="$ALERT_EMAIL" --outputs-file cdk-outputs.json
-        env:
-          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}  # environment secret, masked in logs
+          npx --no-install cdk deploy --require-approval never --outputs-file cdk-outputs.json
       - name: Smoke test
         run: |
           table="$(jq -er '.DealsWatcher.TableName' cdk-outputs.json)"

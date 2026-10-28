@@ -9,7 +9,7 @@ Cost target ≈ $0.10–0.50/month (AWS Budget alert as a cap).
 
 ## Next
 
-- [ ] Phase 2: AWS foundation (table, GitHub OIDC deploy role, budget + failure email) and CI deploy jobs; VAPID key created in SSM by hand
+- [ ] Phase 2: AWS foundation (table, GitHub OIDC deploy role) and CI deploy jobs; VAPID key created in SSM by hand. Cost budgets already exist account-wide ($5, alerts at 80% and 100%); the alert email topic arrives with the first Lambda
 - [ ] Phase 3: hosting, passkey sign-in, API
 - [ ] Phase 4: PWA shell + push
 - [ ] Phase 5: price checker (Best Buy first; then best-effort Target, Walmart, Tennis Warehouse, Costco). Before starting, test real product pages for Tennis Warehouse and Costco, ideally from AWS

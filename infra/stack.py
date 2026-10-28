@@ -1,13 +1,10 @@
-"""The DealsWatcher stack: data table, alert email, cost budget and the GitHub deploy role. Lambdas and hosting follow."""
+"""The DealsWatcher stack: the data table and the GitHub deploy role. Alerts, Lambdas and hosting follow."""
 
 import re
 
 from aws_cdk import CfnOutput, DefaultStackSynthesizer, Duration, RemovalPolicy, Stack
-from aws_cdk import aws_budgets as budgets
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
-from aws_cdk import aws_sns as sns
-from aws_cdk import aws_sns_subscriptions as subs
 from cdk_nag import NagPackSuppression, NagSuppressions, RegexAppliesTo
 from constructs import Construct
 
@@ -33,49 +30,9 @@ class DealsWatcherStack(Stack):
         )
         CfnOutput(self, "TableName", value=self.table.table_name)
 
-        self.topic = self._alert_topic()
-        self._budget()
-
         github_repo: str = self.node.try_get_context("githubRepo") or ""
         if github_repo:
             self._github_deploy_role(github_repo)
-
-    def _budget(self) -> None:
-        """Emails the alert address at 80% of the monthly limit (actual) and 100% (forecast). Two budgets are free."""
-        alert_email: str = self.node.try_get_context("alertEmail") or ""
-        if not alert_email:
-            return
-        limit = float(self.node.try_get_context("monthlyBudgetUsd") or 5)
-
-        def notify(threshold: int, kind: str) -> budgets.CfnBudget.NotificationWithSubscribersProperty:
-            return budgets.CfnBudget.NotificationWithSubscribersProperty(
-                notification=budgets.CfnBudget.NotificationProperty(
-                    comparison_operator="GREATER_THAN", notification_type=kind, threshold=threshold, threshold_type="PERCENTAGE"
-                ),
-                subscribers=[budgets.CfnBudget.SubscriberProperty(subscription_type="EMAIL", address=alert_email)],
-            )
-
-        budgets.CfnBudget(
-            self,
-            "MonthlyBudget",
-            budget=budgets.CfnBudget.BudgetDataProperty(
-                budget_type="COST",
-                time_unit="MONTHLY",
-                budget_limit=budgets.CfnBudget.SpendProperty(amount=limit, unit="USD"),
-            ),
-            notifications_with_subscribers=[notify(80, "ACTUAL"), notify(100, "FORECASTED")],
-        )
-
-    def _alert_topic(self) -> sns.Topic:
-        topic = sns.Topic(self, "AlertTopic", enforce_ssl=True)
-        alert_email: str = self.node.try_get_context("alertEmail") or ""
-        if alert_email:
-            topic.add_subscription(subs.EmailSubscription(alert_email))  # pyright: ignore[reportArgumentType]
-        NagSuppressions.add_resource_suppressions(
-            topic,
-            [NagPackSuppression(id="AwsSolutions-SNS2", reason="Alerts hold no secrets; a customer-managed key costs $1/month")],
-        )
-        return topic
 
     def _github_deploy_role(self, github_repo: str) -> None:
         """Role for GitHub Actions in this repo's production environment. Reuses the account's OIDC provider."""
