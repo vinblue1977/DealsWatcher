@@ -11,6 +11,18 @@ if git grep -nIE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' -- ':!*package
   status=1
 fi
 
+# Emails in commit history (author, committer, Co-authored-by and Signed-off-by trailers), except no-reply, GitHub
+# and example addresses. A shallow clone would hide older commits, so it fails instead of passing.
+if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+  echo "::error::Shallow clone: the history check needs every commit (checkout with fetch-depth: 0)."
+  status=1
+elif git log --format='%ae%n%ce%n%(trailers:key=Co-authored-by,key=Signed-off-by,valueonly)' \
+  | grep -oE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' \
+  | grep -vE '@(users\.noreply\.github|github|example)\.(com|org)$|^noreply@(anthropic|github)\.com$'; then
+  echo "::error::Found email addresses in commit history above. Set a no-reply git email (GitHub: Settings > Emails)."
+  status=1
+fi
+
 # AWS account IDs, except the docs example used in tests.
 if git grep -nwE '[0-9]{12}' -- ':!*package-lock.json' | grep -v '123456789012'; then
   echo "::error::Found 12-digit numbers above that look like AWS account IDs. The deploy reads the account from AWS."

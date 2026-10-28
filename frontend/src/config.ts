@@ -35,7 +35,7 @@ export async function loadConfig(): Promise<Config> {
   } catch {
     config = {} as Config; // CloudFront answers a missing file with the app's HTML page (status 200)
   }
-  if (typeof config.apiUrl !== 'string' || typeof config.authUrl !== 'string' || typeof config.clientId !== 'string') {
+  if (!config || ![config.apiUrl, config.authUrl, config.clientId].every((v) => typeof v === 'string' && v)) {
     throw new Error('App settings are missing. Please try again later.');
   }
   keep(config);

@@ -27,10 +27,17 @@ def _stack(context: dict | None = None, account: str | None = "123456789012") ->
 
 
 @functools.cache
-def _synthesized(context: str | None = None, account: str | None = "123456789012") -> tuple[DealsWatcherStack, Template]:
-    """A stack and its template, built once per context (as JSON) and account: synthesizing is the slow part of these tests."""
+def _build(context: str | None, account: str | None) -> tuple[DealsWatcherStack, Template]:
     stack = _stack(None if context is None else json.loads(context), account)
     return stack, Template.from_stack(stack)
+
+
+def _synthesized(context: str | None = None, account: str | None = "123456789012") -> tuple[DealsWatcherStack, Template]:
+    """A stack and its template, built once per context (as JSON) and account: synthesizing is the slow part of these tests.
+
+    Callers go through here so that explicit and default arguments share one cache entry.
+    """
+    return _build(context, account)
 
 
 def _template(context: dict | None = None) -> Template:
@@ -100,6 +107,21 @@ def test_deploy_role_trusts_only_this_repo_production_environment() -> None:
     # The provider is shared with other stacks in the account, so this stack must not create one.
     template.resource_count_is("Custom::AWSCDKOpenIdConnectProvider", 0)
     template.resource_count_is("AWS::IAM::OIDCProvider", 0)
+
+
+def test_deploy_role_can_only_assume_the_cdk_bootstrap_roles_and_describe_the_table() -> None:
+    policies = _template().find_resources("AWS::IAM::Policy")
+    statements = [
+        statement
+        for policy in policies.values()
+        if any(str(role.get("Ref", "")).startswith("GitHubDeployRole") for role in policy["Properties"]["Roles"])
+        for statement in policy["Properties"]["PolicyDocument"]["Statement"]
+    ]
+    assert statements, "no policy found for the deploy role"
+    actions = {a for s in statements for a in ([s["Action"]] if isinstance(s["Action"], str) else s["Action"])}
+    assert actions == {"sts:AssumeRole", "dynamodb:DescribeTable"}
+    assume = [s for s in statements if s["Action"] == "sts:AssumeRole"]
+    assert assume and all(":role/cdk-hnb659fds-*-" in json.dumps(s["Resource"]) for s in assume)
 
 
 def test_no_deploy_role_without_repo() -> None:

@@ -59,6 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          fetch-depth: 0  # the privacy guard reads the whole commit history
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
@@ -204,7 +205,7 @@ jobs:
 
 
   # Decides whether a push to main deploys: anything outside docs, Markdown, tests and CI config
-  # (except this workflow, which holds the deploy step). A manual run on main always deploys: merges made by
+  # (except this workflow, which holds the deploy step, and scripts/build_layer.sh, which builds the layer). A manual run on main always deploys: merges made by
   # GITHUB_TOKEN don't start a push run, so `gh workflow run ci.yml --ref main` covers them.
   changes:
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
@@ -229,7 +230,7 @@ jobs:
           fi
           echo "$changed"
           deployable="$(grep -Ev '^(docs/|\.github/|tests/|scripts/|LICENSE$|pyrightconfig\.json$)|\.md$' <<<"$changed" || true)"
-          if grep -qx '.github/workflows/ci.yml' <<<"$changed"; then deployable=yes; fi
+          if grep -qxE '.github/workflows/ci.yml|scripts/build_layer.sh' <<<"$changed"; then deployable=yes; fi  # both change what ships
           echo "deploy=$([ -n "$deployable" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
         env:
           BEFORE: ${{ github.event.before }}
