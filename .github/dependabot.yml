@@ -31,6 +31,10 @@ updates:
       # cdk-nag 3 replaces the suppression API (experimental, no grouped acknowledgments yet).
       - dependency-name: cdk-nag
         versions: [">=3.0.0"]
+      # aws-cdk-lib 2.274+ needs jsii 1.142, which needs python-dateutil 3, but botocore requires python-dateutil <3,
+      # so `pip check` fails in CI. Remove this once botocore allows python-dateutil 3.
+      - dependency-name: aws-cdk-lib
+        versions: [">=2.274.0"]
   # The Lambda layer: requirements.in holds the ranges; Dependabot regenerates the hashed lockfile.
   - package-ecosystem: pip
     directory: /layer
