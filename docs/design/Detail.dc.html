@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Watch detail</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="--bg:#0B0D10;--surface:#14181D;--surface2:#1C2128;--line:#262C34;--text:#ECEEF1;--muted:#98A1AD;--accent:#FFB224;--good:#3DD68C;--bad:#FF8A7A;width:390px;height:844px;box-sizing:border-box;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',Inter,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <div style="flex:1;min-height:0;padding:56px 20px 0;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <a href="Main.dc.html" style="min-height:44px;display:inline-flex;align-items:center;gap:2px;color:var(--accent);font-size:16px;font-weight:500;margin-left:-6px">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Watching</a>
+      <a href="https://www.bestbuy.com" style="min-height:44px;display:inline-flex;align-items:center;gap:6px;color:var(--accent);font-size:15px;font-weight:600">Open at Best Buy
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+    </div>
+
+    <div>
+      <h1 style="margin:0;font-size:24px;line-height:30px;font-weight:700;letter-spacing:-0.01em">LG C5 55″ OLED TV</h1>
+      <div style="font-size:14px;color:var(--muted);margin-top:2px">Best Buy · checked 6 min ago</div>
+    </div>
+
+    <div style="display:flex;align-items:flex-end;gap:12px">
+      <div style="font-size:40px;line-height:44px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums">$1,096.99</div>
+      <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;background:rgba(61,214,140,0.14);color:var(--good);font-size:13px;font-weight:600;margin-bottom:6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>At target</span>
+    </div>
+    <div style="font-size:14px;color:var(--good);margin-top:-8px;font-variant-numeric:tabular-nums">▼ $203.00 since you started watching</div>
+
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 14px 10px">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <span style="min-height:32px;box-sizing:border-box;padding:0 12px;border-radius:16px;background:var(--surface2);font-size:13px;font-weight:600;display:inline-flex;align-items:center">30 days</span>
+        <span style="min-height:32px;box-sizing:border-box;padding:0 12px;border-radius:16px;font-size:13px;color:var(--muted);display:inline-flex;align-items:center">7 days</span>
+        <span style="min-height:32px;box-sizing:border-box;padding:0 12px;border-radius:16px;font-size:13px;color:var(--muted);display:inline-flex;align-items:center">90 days</span>
+      </div>
+      <svg width="100%" viewBox="0 0 340 168" role="img" aria-label="Price over the last 30 days, falling from $1,299.99 to $1,096.99, below the $1,100 target on the last day" style="display:block">
+        <g stroke="#262C34" stroke-width="1"><path d="M34 20H340M34 72H340M34 124H340"/></g>
+        <g fill="#98A1AD" font-size="11" font-family="-apple-system,system-ui,sans-serif" font-variant-numeric="tabular-nums"><text x="0" y="24">$1,300</text><text x="0" y="76">$1,200</text><text x="0" y="128">$1,100</text><text x="34" y="162">Sep 28</text><text x="296" y="162" text-anchor="end">Today</text></g>
+        <path d="M34 124H340" stroke="#FFB224" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <path d="M34 20L72 20L96 22L112 46L150 46L170 72L205 72L222 98L262 98L276 111L300 125L312 126" fill="none" stroke="#ECEEF1" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="312" cy="126" r="5" fill="#3DD68C" stroke="#14181D" stroke-width="2"/>
+      </svg>
+      <div style="display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted);padding-top:2px">
+        <span style="display:inline-flex;align-items:center;gap:6px"><svg width="18" height="4" aria-hidden="true"><path d="M0 2H18" stroke="#ECEEF1" stroke-width="2"/></svg>Price</span>
+        <span style="display:inline-flex;align-items:center;gap:6px"><svg width="18" height="4" aria-hidden="true"><path d="M0 2H18" stroke="#FFB224" stroke-width="2" stroke-dasharray="4 3"/></svg>Your target</span>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px">
+        <div style="font-size:12px;color:var(--muted)">Lowest ever</div>
+        <div style="font-size:16px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums">$1,096.99</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px">
+        <div style="font-size:12px;color:var(--muted)">Highest</div>
+        <div style="font-size:16px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums">$1,299.99</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px">
+        <div style="font-size:12px;color:var(--muted)">Alerts sent</div>
+        <div style="font-size:16px;font-weight:700;margin-top:2px">1</div>
+      </div>
+    </div>
+
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;min-height:52px;padding:0 14px;border-bottom:1px solid var(--line)">
+        <span style="font-size:15px">Target price</span>
+        <span style="font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:6px">$1,100.00
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#98A1AD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;min-height:52px;padding:0 14px;gap:12px">
+        <span style="font-size:15px">Also alert on drops of 10% or more</span>
+        <button role="switch" aria-checked="true" aria-label="Alert on drops of 10% or more" style="flex:none;width:51px;height:31px;border-radius:16px;border:0;background:var(--good);position:relative;padding:0"><span style="position:absolute;top:2px;right:2px;width:27px;height:27px;border-radius:14px;background:#fff"></span></button>
+      </div>
+    </div>
+  </div>
+
+  <nav aria-label="Main" style="flex:none;height:84px;box-sizing:border-box;padding:8px 8px 0;background:var(--surface);border-top:1px solid var(--line);display:flex;position:relative">
+    <a href="Main.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--accent);font-size:11px;font-weight:600;padding-top:4px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Watching</a>
+    <a href="Deals.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:500;padding-top:4px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>Deals</a>
+    <a href="Keywords.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:500;padding-top:4px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg>Keywords</a>
+    <a href="Settings.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:500;padding-top:4px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>Settings</a>
+    <div style="position:absolute;left:128px;bottom:8px;width:134px;height:5px;border-radius:3px;background:rgba(236,238,241,0.4)"></div>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

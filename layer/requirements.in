@@ -1,0 +1,3 @@
+# Lambda runtime dependencies (boto3 comes with the runtime). Edit, then `make lock`.
+cryptography>=50.0.1,<51  # Web Push encryption and VAPID signing
+tzdata>=2026.5  # time zones for calendar events (the Lambda image may not ship them)
