@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Keywords</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button,input{font-family:inherit}
+</style>
+</helmet>
+<div style="--bg:#0B0D10;--surface:#14181D;--surface2:#1C2128;--line:#262C34;--text:#ECEEF1;--muted:#98A1AD;--accent:#FFB224;--good:#3DD68C;width:390px;height:844px;box-sizing:border-box;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',Inter,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden">
+  <div style="flex:1;min-height:0;padding:64px 20px 0;display:flex;flex-direction:column;gap:14px">
+    <div>
+      <h1 style="margin:0;font-size:34px;line-height:40px;font-weight:700;letter-spacing:-0.02em">Keywords</h1>
+      <div style="font-size:14px;color:var(--muted);margin-top:2px">We watch deal feeds and alert you on a match.</div>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <label for="kw" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">New keyword</label>
+      <input id="kw" placeholder="Add a keyword, e.g. OLED" style="flex:1;min-width:0;box-sizing:border-box;height:48px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:15px">
+      <button type="button" aria-label="Add keyword" style="flex:none;width:48px;height:48px;border-radius:12px;border:0;background:var(--accent);display:flex;align-items:center;justify-content:center;padding:0">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1A1204" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px;display:flex;gap:12px;align-items:center">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:17px;font-weight:700">OLED</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:3px">Under $1,200 · Slickdeals, Reddit</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">8 matches this week</div>
+        </div>
+        <button role="switch" aria-checked="true" aria-label="OLED alerts on" style="flex:none;width:51px;height:31px;border-radius:16px;border:0;background:var(--good);position:relative;padding:0"><span style="position:absolute;top:2px;right:2px;width:27px;height:27px;border-radius:14px;background:#fff"></span></button>
+      </div>
+
+      <div style="padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px;display:flex;gap:12px;align-items:center">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:17px;font-weight:700">AirPods</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:3px">Under $220 · Slickdeals, Reddit</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">3 matches this week</div>
+        </div>
+        <button role="switch" aria-checked="true" aria-label="AirPods alerts on" style="flex:none;width:51px;height:31px;border-radius:16px;border:0;background:var(--good);position:relative;padding:0"><span style="position:absolute;top:2px;right:2px;width:27px;height:27px;border-radius:14px;background:#fff"></span></button>
+      </div>
+
+      <div style="padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px;display:flex;gap:12px;align-items:center">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:17px;font-weight:700">Dyson</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:3px">Any price · Slickdeals</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">1 match this week</div>
+        </div>
+        <button role="switch" aria-checked="true" aria-label="Dyson alerts on" style="flex:none;width:51px;height:31px;border-radius:16px;border:0;background:var(--good);position:relative;padding:0"><span style="position:absolute;top:2px;right:2px;width:27px;height:27px;border-radius:14px;background:#fff"></span></button>
+      </div>
+
+      <div style="padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px;display:flex;gap:12px;align-items:center">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:17px;font-weight:700;color:var(--muted)">Sony</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:3px">Under $350 · Reddit · Paused</div>
+        </div>
+        <button role="switch" aria-checked="false" aria-label="Sony alerts off" style="flex:none;width:51px;height:31px;border-radius:16px;border:0;background:var(--surface2);position:relative;padding:0"><span style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:14px;background:#fff"></span></button>
+      </div>
+    </div>
+
+    <div style="font-size:13px;color:var(--muted);line-height:18px">Alerts are sent once per deal. Quiet hours apply (set in Settings).</div>
+  </div>
+
+  <nav aria-label="Main" style="flex:none;height:84px;box-sizing:border-box;padding:8px 8px 0;background:var(--surface);border-top:1px solid var(--line);display:flex;position:relative">
+    <a href="Main.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:500;padding-top:4px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Watching</a>
+    <a href="Deals.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:500;padding-top:4px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>Deals</a>
+    <a href="Keywords.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--accent);font-size:11px;font-weight:600;padding-top:4px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg>Keywords</a>
+    <a href="Settings.dc.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:500;padding-top:4px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>Settings</a>
+    <div style="position:absolute;left:128px;bottom:8px;width:134px;height:5px;border-radius:3px;background:rgba(236,238,241,0.4)"></div>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

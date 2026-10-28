@@ -1,0 +1,28 @@
+/* Colour tokens: the only place colours are written. Dark ships first; light mode is a second value set later. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0d10;
+  --surface: #14181d;
+  --surface2: #1c2128;
+  --line: #262c34;
+  --text: #eceef1;
+  --muted: #98a1ad;
+  --accent: #ffb224;
+  --accent-ink: #1a1204;
+  --good: #3dd68c;
+  --warn: #f5c451;
+  --bad: #ff8a7a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif;
+  padding: env(safe-area-inset-top) 20px env(safe-area-inset-bottom);
+}
+
+h1 { font-size: 34px; line-height: 40px; letter-spacing: -0.02em; margin: 64px 0 4px; }
+.muted { color: var(--muted); font-size: 14px; }

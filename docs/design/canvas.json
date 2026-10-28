@@ -1,0 +1,36 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-10-28T09:00:00Z" },
+  "title": "DealsWatcher Mockups",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": { "x": 0, "y": 0, "w": 390, "h": 844, "title": "1 Watching", "is_interactive": true },
+    "Detail.dc.html": { "x": 470, "y": 0, "w": 390, "h": 844, "title": "2 Watch detail", "is_interactive": true },
+    "Add.dc.html": { "x": 940, "y": 0, "w": 390, "h": 844, "title": "3 Add watch", "is_interactive": true },
+    "Deals.dc.html": { "x": 1410, "y": 0, "w": 390, "h": 844, "title": "4 Deals feed", "is_interactive": true },
+    "Keywords.dc.html": { "x": 0, "y": 964, "w": 390, "h": 844, "title": "5 Keywords", "is_interactive": true },
+    "Settings.dc.html": { "x": 470, "y": 964, "w": 390, "h": 844, "title": "6 Settings", "is_interactive": true },
+    "Lock.dc.html": { "x": 940, "y": 964, "w": 390, "h": 844, "title": "7 Push notifications" }
+  },
+  "order": [
+    "Main.dc.html",
+    "Detail.dc.html",
+    "Add.dc.html",
+    "Deals.dc.html",
+    "Keywords.dc.html",
+    "Settings.dc.html",
+    "Lock.dc.html"
+  ],
+  "notes": {
+    "t1": { "x": 0, "y": -260, "text": "DealsWatcher: iPhone PWA, dark mode (v1)", "kind": "title1", "maxW": 1800 },
+    "s1": {
+      "x": 1410,
+      "y": 964,
+      "w": 360,
+      "text": "Colours are semantic tokens (bg, surface, text, muted, accent, good, warn). Light mode later = a second value set; no component changes.",
+      "fill": "gray"
+    }
+  },
+  "designSystems": []
+}

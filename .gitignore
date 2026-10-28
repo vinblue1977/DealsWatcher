@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+build/
+
+# CDK
+cdk.out/
+cdk.context.json
+
+# Frontend
+node_modules/
+frontend/dist/
+
+# Secrets and local config
+.env
+.env.*
+*.pem
+
+# Personal data: match imports and API dumps never go in this public repo
+*.xlsx
+*.xls
+*.csv
+data/
+
+.DS_Store

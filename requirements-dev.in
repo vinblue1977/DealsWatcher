@@ -1,0 +1,11 @@
+-r requirements.in
+-c requirements.txt
+pytest>=9.1.1
+pytest-cov>=7.1.0
+ruff>=0.16.10
+pip-audit>=2.10.1
+moto[dynamodb,sns,sqs]>=5.2.3
+boto3>=1.43.110
+pytest-xdist>=3.8.0
+pip-tools>=7.6.2  # `make lock`
+setuptools>=84.1.0  # GHSA-xmj3-9gf7-h52w
