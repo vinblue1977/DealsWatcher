@@ -26,3 +26,14 @@ body {
 
 h1 { font-size: 34px; line-height: 40px; letter-spacing: -0.02em; margin: 64px 0 4px; }
 .muted { color: var(--muted); font-size: 14px; }
+
+.button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface2);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+}

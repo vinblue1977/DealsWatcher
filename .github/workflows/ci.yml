@@ -270,7 +270,9 @@ jobs:
           uv venv --seed --python "$(which python)" .venv
           uv pip install --python .venv/bin/python --require-hashes -r requirements-dev.txt
           make audit  # an advisory published since the PR stops the deploy (the PR already ran the tests)
+          make layer  # the locked runtime dependencies, hash-checked
           npm ci --ignore-scripts --no-audit --no-fund  # the pinned CDK CLI (package-lock.json)
+          npm ci --prefix frontend --ignore-scripts --no-audit --no-fund && npm --prefix frontend run build
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
@@ -283,4 +285,12 @@ jobs:
       - name: Smoke test
         run: |
           table="$(jq -er '.DealsWatcher.TableName' cdk-outputs.json)"
+          site="$(jq -er '.DealsWatcher.SiteUrl' cdk-outputs.json)"
+          api="$(jq -er '.DealsWatcher.ApiUrl' cdk-outputs.json)"
           [ "$(aws dynamodb describe-table --table-name "$table" --query 'Table.TableStatus' --output text)" = ACTIVE ]
+          check() {
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --retry 3 --retry-all-errors "$2")"
+            echo "$2 -> $code (want $1)"; [ "$code" = "$1" ]
+          }
+          check 200 "$site/"
+          check 401 "$api/me/watches"  # sign-in required

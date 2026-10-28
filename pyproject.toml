@@ -9,7 +9,7 @@ license-files = ["LICENSE"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = [".", "backend"]
-addopts = "-q --cov=infra --cov-report=term-missing:skip-covered --cov-fail-under=90"
+addopts = "-q --cov=infra --cov=api --cov=push --cov-report=term-missing:skip-covered --cov-fail-under=90"
 
 [tool.ruff]
 line-length = 130
@@ -24,4 +24,4 @@ select = ["E", "F", "W", "I", "B", "UP", "S"]
 "tests/**" = ["S101", "S105", "S106"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["infra"]
+known-first-party = ["infra", "api", "push"]
