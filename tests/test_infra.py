@@ -178,11 +178,65 @@ def test_the_web_push_public_key_is_configured_so_the_app_can_subscribe() -> Non
     assert len(key) == 87 and key.startswith("B")  # an uncompressed P-256 point, base64url
 
 
-def test_no_alarms_or_alert_topic_yet() -> None:
-    # Each alarm beyond the account's free 10 costs money; alarms arrive with the checkers (Phases 5 and 6).
+@pytest.fixture(autouse=True)
+def _no_alert_email_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ALERT_EMAIL", raising=False)  # a developer's own setting must not change what these tests build
+
+
+def test_one_crash_alarm_on_the_feed_checker_emails_through_one_topic() -> None:
     template = _template()
-    template.resource_count_is("AWS::CloudWatch::Alarm", 0)
-    template.resource_count_is("AWS::SNS::Topic", 0)
+    template.resource_count_is("AWS::CloudWatch::Alarm", 1)  # the account's free allowance is 10 alarms: this stays inside it
+    template.resource_count_is("AWS::SNS::Topic", 1)
+    template.has_resource_properties(
+        "AWS::CloudWatch::Alarm",
+        {
+            "Namespace": "AWS/Lambda",
+            "MetricName": "Errors",
+            "Statistic": "Sum",
+            "Period": 1800,
+            "EvaluationPeriods": 2,
+            "DatapointsToAlarm": 2,  # two failed runs in a row, about an hour: a single blip is retried and stays quiet
+            "Threshold": 1,
+            "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+            "TreatMissingData": "notBreaching",
+            "AlarmActions": [Match.any_value()],
+            "OKActions": Match.absent(),  # failure emails only: an "OK" email would also fire when the alarm is first created
+        },
+    )
+    (alarm,) = template.find_resources("AWS::CloudWatch::Alarm").values()
+    assert "FeedsChecker" in json.dumps(alarm["Properties"]["Dimensions"])  # it watches the feed checker, not another function
+
+
+def test_the_alert_topic_only_accepts_encrypted_connections() -> None:
+    template = _template()
+    template.has_resource_properties(
+        "AWS::SNS::TopicPolicy",
+        {
+            "PolicyDocument": {
+                "Statement": Match.array_with(
+                    [Match.object_like({"Effect": "Deny", "Condition": {"Bool": {"aws:SecureTransport": "false"}}})]
+                )
+            }
+        },
+    )
+
+
+def test_there_is_no_email_subscription_unless_an_address_is_supplied() -> None:
+    _template().resource_count_is("AWS::SNS::Subscription", 0)
+
+
+def test_the_alert_address_comes_from_context_or_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    _template({"alertEmail": "owner@example.com"}).has_resource_properties(
+        "AWS::SNS::Subscription", {"Protocol": "email", "Endpoint": "owner@example.com"}
+    )
+    monkeypatch.setenv("ALERT_EMAIL", "from-env@example.com")
+    _template({"fromEnvironment": "yes"}).has_resource_properties("AWS::SNS::Subscription", {"Endpoint": "from-env@example.com"})
+
+
+def test_a_malformed_alert_address_is_refused_without_repeating_it() -> None:
+    with pytest.raises(ValueError, match="not a valid address") as error:
+        _template({"alertEmail": "not-an-email"})
+    assert "not-an-email" not in str(error.value)  # CI logs are public
 
 
 def test_api_function_can_only_use_the_table_operations_it_needs() -> None:
@@ -231,3 +285,15 @@ def test_feed_checker_can_only_use_the_table_operations_it_needs() -> None:
         "dynamodb:UpdateItem",
         "dynamodb:DeleteItem",
     }
+
+
+def test_the_checker_does_not_retry_by_itself_so_one_failed_run_is_one_error() -> None:
+    template = _template()
+    template.has_resource_properties("AWS::Lambda::EventInvokeConfig", {"MaximumRetryAttempts": 0})
+
+
+def test_a_blank_or_padded_alert_address_is_tolerated() -> None:
+    _template({"alertEmail": "  "}).resource_count_is("AWS::SNS::Subscription", 0)  # blank means none, not an error
+    _template({"alertEmail": " owner@example.com\n"}).has_resource_properties(
+        "AWS::SNS::Subscription", {"Endpoint": "owner@example.com"}
+    )

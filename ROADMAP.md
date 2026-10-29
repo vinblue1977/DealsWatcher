@@ -13,11 +13,12 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 - [x] Phase 4: PWA screens (Watching, Add, Detail, Deals, Keywords, Settings), service worker, push notifications, install hint, app icon
 - [x] Phase 6: feed checker for Dealnews: the main feed (`dealnews.com/?rss=1`) and the Black Friday feed (`dealnews.com/f1676/Black-Friday/?rss=1`), every 30 minutes, keyword alerts with one push per deal
 - [x] Security hardening pass (least-privilege table access, request size cap, push endpoint kept out of URLs)
+- [x] Alert topic + crash alarm on the feed checker: emails when it fails on two runs in a row (about an hour); no recovery email, and no email if it stops running at all (see Engineering backlog); the address comes from a deploy secret
 - [x] Multi-user: invite-only accounts (no sign-up page), invitation email with setup steps, `scripts/invite_user.sh` and `scripts/remove_user.py` (removes the account and all of their data), per-user isolation tested on every route. See `docs/users.md`
 
 ## Next
 
-1. [ ] **Alert email + crash alarm for the feed checker** (SNS topic, one alarm; each alarm past the account's free 10 costs ~$0.10/month). **Needs you**: the address to alert. It goes in through deploy settings, never into the repo
+1. [ ] **Alert email: finish setup.** The topic and the crash alarm are in place (one alarm; each alarm past the account's free 10 would cost ~$0.10/month). **Needs you**: store the address as the `ALERT_EMAIL` secret in the GitHub `production` environment (never in the repo), run the deploy, then click the confirmation link AWS emails you. Check by temporarily failing the checker, or trust the alarm test
 2. [ ] Keep people signed in while they use the app: rotate refresh tokens so each renewal extends the session (today it is a fixed year from sign-in). Own small PR: it changes sign-in
 3. [ ] Phase 7: Black Friday polish (see App polish below); Black Friday 2026 is Nov 27
 
@@ -64,6 +65,7 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 - [ ] Share the "load / retry" notice and fetch pattern across screens (repeated in five places)
 - [ ] Rendering tests for the screens (needs a DOM test setup and a new dev dependency; the logic is covered by pure-function tests)
 - [ ] Fetch feeds concurrently if more are added
+- [ ] An alarm for the checker not running at all (no invocations for hours): a second alarm, ~$0.10/month once past the free 10
 - [ ] Alerts left unsent are only retried while their deal is still in a feed and under 6 hours old
 - [ ] Duplicate keyword check is read-then-write: two simultaneous adds can slip past (strict fix needs a different key design)
 - [ ] Older keyword rules may still list Reddit or Slickdeals as sources (harmless, hidden in the UI); migrate if it ever matters
