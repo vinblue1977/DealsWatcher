@@ -48,7 +48,8 @@ export const api = {
   editRule: (id: string, patch: RulePatch) => call<Rule>(`/me/rules/${id}`, send('PUT', patch)),
   deleteRule: (id: string) => call<{ deleted: string }>(`/me/rules/${id}`, send('DELETE')),
   deals: () => call<{ deals: Deal[] }>('/me/deals').then((r) => r.deals),
-  pushStatus: (endpoint: string) => call<{ devices: number; thisDevice: boolean }>(`/me/push?endpoint=${encodeURIComponent(endpoint)}`),
+  // The endpoint is a secret (it lets anyone push to the device): bodies only, never URLs, so it stays out of logs.
+  pushStatus: (endpoint: string) => call<{ devices: number; thisDevice: boolean }>('/me/push/status', send('POST', { endpoint })),
   pushOn: (subscription: PushSubscriptionJSON, timeZone: string) =>
     call<{ devices: number }>('/me/push', send('PUT', { ...subscription, timeZone })),
   pushOff: (endpoint: string) => call<{ devices: number }>('/me/push', send('DELETE', { endpoint })),

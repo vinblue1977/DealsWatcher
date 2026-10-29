@@ -167,3 +167,11 @@ input.text { height: 48px; padding: 0 14px; border-radius: 12px; border: 1px sol
 .textbutton { min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; }
 .confirm { gap: 8px; margin-top: 4px; }
 .confirm .button { min-height: 40px; }
+
+/* Notifications card */
+.card-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.notify-head { display: flex; align-items: center; gap: 12px; }
+.icon { flex: none; width: 40px; height: 40px; border-radius: 10px; background: var(--surface2); color: var(--muted); display: flex; align-items: center; justify-content: center; }
+.icon.good { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
+.notify-title { font-size: 16px; font-weight: 600; }
+.card-body .error, .card-body .muted { margin: 0; }
