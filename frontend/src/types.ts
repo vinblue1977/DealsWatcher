@@ -51,5 +51,6 @@ export interface Deal {
   price?: number | null;
   source?: Source;
   keyword?: string;
-  seenAt?: string;
+  retailer?: string;
+  publishedAt?: string;
 }

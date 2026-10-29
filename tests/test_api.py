@@ -149,14 +149,10 @@ def test_unknown_or_malformed_watch_ids_are_404() -> None:
 
 
 def test_keyword_rules_crud() -> None:
-    status, rule = call("POST /me/rules", {"keyword": " OLED ", "maxPrice": 1200, "sources": ["reddit", "slickdeals", "reddit"]})
-    assert (
-        status == 201 and rule["keyword"] == "OLED" and rule["maxPrice"] == 1200 and rule["sources"] == ["reddit", "slickdeals"]
-    )
+    status, rule = call("POST /me/rules", {"keyword": " OLED ", "maxPrice": 1200, "sources": ["dealnews", "dealnews"]})
+    assert status == 201 and rule["keyword"] == "OLED" and rule["maxPrice"] == 1200 and rule["sources"] == ["dealnews"]
     default = call("POST /me/rules", {"keyword": "Dyson"})[1]
-    assert (
-        default["maxPrice"] is None and default["enabled"] is True and default["sources"] == ["dealnews", "reddit", "slickdeals"]
-    )
+    assert default["maxPrice"] is None and default["enabled"] is True and default["sources"] == ["dealnews"]
     assert [r["keyword"] for r in call("GET /me/rules")[1]["rules"]] == ["Dyson", "OLED"]
     status, body = call("PUT /me/rules/{id}", {"enabled": False, "maxPrice": None}, item_id=rule["id"])
     assert status == 200 and body["enabled"] is False and body["maxPrice"] is None and body["keyword"] == "OLED"
@@ -177,6 +173,7 @@ def test_keyword_rules_crud() -> None:
         {"keyword": "ok", "maxPrice": -1},
         {"keyword": "ok", "sources": []},
         {"keyword": "ok", "sources": ["amazon"]},
+        {"keyword": "ok", "sources": ["reddit"]},  # not read by the checker: refused instead of silently never firing
         {"keyword": "ok", "enabled": "yes"},
     ],
 )
@@ -197,11 +194,12 @@ def test_rule_update_validation_and_limits(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_deals_feed_lists_the_users_deals_newest_first(table: Any) -> None:
-    for sk in ("DEAL#2026-10-28T01#a", "DEAL#2026-10-28T09#b"):
-        table.put_item(Item={"PK": f"USER#{USER}", "SK": sk, "title": sk})
-    table.put_item(Item={"PK": f"USER#{OTHER}", "SK": "DEAL#2026-10-28T10#c", "title": "other"})
-    assert [d["title"] for d in call("GET /me/deals")[1]["deals"]] == ["DEAL#2026-10-28T09#b", "DEAL#2026-10-28T01#a"]
-    assert call("GET /me/deals")[1]["deals"][0]["id"] == "DEAL#2026-10-28T09#b"  # the app keys its cards on this
+    # newest by publish time, whatever their keys look like
+    for sk, published in (("DEAL#zzz", "2026-10-28T01:00:00+00:00"), ("DEAL#aaa", "2026-10-28T09:00:00+00:00"), ("DEAL#mmm", "")):
+        table.put_item(Item={"PK": f"USER#{USER}", "SK": sk, "title": sk, "publishedAt": published})
+    table.put_item(Item={"PK": f"USER#{OTHER}", "SK": "DEAL#ccc", "title": "other", "publishedAt": "2026-10-28T10:00:00+00:00"})
+    assert [d["title"] for d in call("GET /me/deals")[1]["deals"]] == ["DEAL#aaa", "DEAL#zzz", "DEAL#mmm"]
+    assert call("GET /me/deals")[1]["deals"][0]["id"] == "DEAL#aaa"  # the app keys its cards on this
 
 
 def test_push_device_lifecycle(monkeypatch: pytest.MonkeyPatch, table: Any) -> None:
@@ -271,9 +269,16 @@ def test_ids_with_a_trailing_newline_are_not_valid() -> None:
 
 def test_deals_hide_internal_keys_and_return_at_most_100(table: Any) -> None:
     for i in range(105):
-        table.put_item(Item={"PK": f"USER#{USER}", "SK": f"DEAL#{i:04d}", "title": str(i)})
+        table.put_item(
+            Item={
+                "PK": f"USER#{USER}",
+                "SK": f"DEAL#{i:04d}",
+                "title": str(i),
+                "publishedAt": f"2026-10-28T10:{i // 60:02d}:{i % 60:02d}+00:00",
+            }
+        )
     deals = call("GET /me/deals")[1]["deals"]
-    assert len(deals) == 100 and deals[0] == {"title": "104", "id": "DEAL#0104"} and "PK" not in deals[0]
+    assert len(deals) == 100 and deals[0] == {"title": "104", "id": "DEAL#0104", "publishedAt": "2026-10-28T10:01:44+00:00"}
 
 
 @pytest.mark.parametrize("zone", ["Europe", "../etc", "x" * 65, 5])  # a directory, a path, too long, not a string
@@ -370,3 +375,11 @@ def test_push_status_needs_a_known_push_service_endpoint_and_stays_out_of_urls()
     assert call("POST /me/push/status", {"endpoint": "https://evil.example/x"})[0] == 400
     assert call("POST /me/push/status", [1])[0] == 400
     assert call("GET /me/push", query={"endpoint": ENDPOINT})[0] == 404  # the old URL-based route is gone
+
+
+def test_deals_hide_the_expiry_and_delivery_flag(table: Any) -> None:
+    table.put_item(
+        Item={"PK": f"USER#{USER}", "SK": "DEAL#2026-10-29T10:00:00Z#abc", "title": "t", "ttl": 1800000000, "pushed": True}
+    )
+    (deal,) = call("GET /me/deals")[1]["deals"]
+    assert deal == {"title": "t", "id": "DEAL#2026-10-29T10:00:00Z#abc"}

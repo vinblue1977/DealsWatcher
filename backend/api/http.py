@@ -18,8 +18,8 @@ def json_response(status: int, body: Any) -> dict[str, Any]:
 
 
 def view(item: dict[str, Any]) -> dict[str, Any]:
-    """An item as the API shows it: without its DynamoDB keys."""
-    return {k: v for k, v in item.items() if k not in ("PK", "SK")}
+    """An item as the API shows it: without its DynamoDB keys, expiry and delivery flag."""
+    return {k: v for k, v in item.items() if k not in ("PK", "SK", "ttl", "pushed")}
 
 
 def parse_object(body: str | None) -> dict[str, Any] | None:

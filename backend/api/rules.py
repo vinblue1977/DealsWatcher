@@ -9,7 +9,7 @@ from api.http import json_response, parse_object, price, query_items, update_ite
 
 MAX_RULES = 50
 RULE_ID = re.compile(r"^[0-9a-f]{12}$")
-SOURCES = ("dealnews", "reddit", "slickdeals")
+SOURCES = ("dealnews",)  # the feeds the checker reads; Slickdeals and Reddit disallow automated access (robots.txt)
 
 
 def _fields(data: dict[str, Any], partial: bool) -> tuple[dict[str, Any], str | None]:

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from './api';
-import { ago, money, safeLink, sourceName, SOURCES } from './format';
+import { ago, money, safeLink, sourceName } from './format';
 import type { Deal, Source } from './types';
 
 const MAX_DEALS = 100; // what the API returns
@@ -16,7 +16,7 @@ function Card({ deal }: { deal: Deal }) {
       </div>
       <div class="deal-meta muted small">
         {deal.keyword && <span class="tag">{deal.keyword}</span>}
-        <span>{[sourceName(deal.source), deal.seenAt ? ago(deal.seenAt) : ''].filter(Boolean).join(' · ')}</span>
+        <span>{[deal.retailer, sourceName(deal.source), deal.publishedAt ? ago(deal.publishedAt) : ''].filter(Boolean).join(' · ')}</span>
       </div>
     </>
   );
@@ -56,6 +56,7 @@ export function Deals() {
     };
   }, [attempt]);
 
+  const sources = [...new Set((deals ?? []).flatMap((d) => (d.source ? [d.source] : [])))]; // only feeds that have deals
   const shown = (deals ?? []).filter((d) => source === 'all' || d.source === source);
   return (
     <main class="screen">
@@ -73,9 +74,9 @@ export function Deals() {
         </div>
       )}
 
-      {deals && deals.length > 0 && (
+      {deals && sources.length > 1 && (
         <div class="chips">
-          {(['all', ...SOURCES] as const).map((id) => (
+          {(['all', ...sources] as const).map((id) => (
             <button key={id} type="button" class={source === id ? 'chip on' : 'chip'} aria-pressed={source === id} onClick={() => setSource(id)}>
               {id === 'all' ? 'All' : sourceName(id)}
             </button>

@@ -35,9 +35,12 @@ def devices(table: Any, user: str) -> list[dict[str, Any]]:
         kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
 
-def notify(table: Any, user: str, title: str, body: str, url: str = "/", only: str | None = None) -> int:
-    """Returns how many devices it reached; expired subscriptions are removed. `only`: one device's sort key (PUSH#...)."""
-    sent = 0
+def notify(table: Any, user: str, title: str, body: str, url: str = "/", only: str | None = None, strict: bool = False) -> int:
+    """Returns how many devices it reached; expired subscriptions are removed. `only`: one device's sort key (PUSH#...).
+
+    `strict`: raise when there were devices to try but every send failed (not just expired), so a caller can retry later.
+    """
+    sent = failed = 0
     if only is None:
         mine = devices(table, user)
     else:  # one exact row, not a query over all devices
@@ -54,4 +57,7 @@ def notify(table: Any, user: str, title: str, body: str, url: str = "/", only: s
             table.delete_item(Key={"PK": device["PK"], "SK": device["SK"]})
         except Exception:  # one bad device must not stop the others
             log.exception("push failed")
+            failed += 1
+    if strict and failed and not sent:
+        raise RuntimeError("push failed on every device")
     return sent
