@@ -1,28 +1,16 @@
-export function App({
-  email,
-  onSignOut,
-  passkeyUrl,
-}: {
-  email: string;
-  onSignOut: () => void;
-  passkeyUrl: string;
-}) {
+import { AddWatch } from './AddWatch';
+import { Nav } from './Nav';
+import { Settings } from './Settings';
+import { Watching } from './Watching';
+import { useRoute } from './router';
+
+export function App({ email, onSignOut, passkeyUrl }: { email: string; onSignOut: () => void; passkeyUrl: string }) {
+  const route = useRoute();
+  if (route === 'add') return <AddWatch />;
   return (
-    <main>
-      <h1>Watching</h1>
-      <section class="empty">
-        <p>Nothing watched yet.</p>
-        <p class="muted">Add a product link and you'll get a push notification when its price drops.</p>
-      </section>
-      <section class="account">
-        <p class="muted">Signed in{email ? ` as ${email}` : ''}.</p>
-        <a class="button" href={passkeyUrl}>
-          Add passkey
-        </a>
-        <button class="button" type="button" onClick={onSignOut}>
-          Sign out
-        </button>
-      </section>
-    </main>
+    <>
+      {route === 'settings' ? <Settings email={email} onSignOut={onSignOut} passkeyUrl={passkeyUrl} /> : <Watching />}
+      <Nav active={route} />
+    </>
   );
 }
