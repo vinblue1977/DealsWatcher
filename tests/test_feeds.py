@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from email.utils import format_datetime
 from typing import Any
+from xml.sax.saxutils import escape
 
 import boto3
 import pytest
@@ -36,7 +37,7 @@ def item(
         **extra,
     }
     tags = {("dn:" + k if k in ("retailer", "category", "price") else k): v for k, v in fields.items()}  # the feed's own fields
-    return "<item>" + "".join(f"<{k}>{v}</{k}>" for k, v in tags.items()) + "</item>"
+    return "<item>" + "".join(f"<{k}>{escape(v)}</{k}>" for k, v in tags.items()) + "</item>"
 
 
 def feed(*items: str) -> bytes:
@@ -118,12 +119,17 @@ class TestFetch:
             return Response()
 
         monkeypatch.setattr(dealnews._OPENER, "open", open_)  # noqa: SLF001
-        assert dealnews.fetch() == b"x" * 10
-        assert (
-            seen["ua"].startswith("DealsWatcher/1.0")
-            and seen["url"] == "https://www.dealnews.com/?rss=1"
-            and seen["timeout"] == 10
-        )
+        for url in dealnews.FEEDS:
+            assert dealnews.fetch(url) == b"x" * 10
+            assert seen["ua"].startswith("DealsWatcher/1.0") and seen["url"] == url and seen["timeout"] == 10
+        assert dealnews.FEEDS == ("https://www.dealnews.com/?rss=1", "https://www.dealnews.com/f1676/Black-Friday/?rss=1")
+        assert dealnews.REQUIRED == (dealnews.MAIN_FEED,)
+
+    def test_only_the_listed_feeds_can_be_fetched(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(dealnews._OPENER, "open", lambda *a, **k: pytest.fail("must not make a request"))  # noqa: SLF001
+        for url in ("https://evil.example/feed", "http://www.dealnews.com/?rss=1", "https://www.dealnews.com/?rss=2", ""):
+            with pytest.raises(ValueError, match="not a known feed"):
+                dealnews.fetch(url)
 
     def test_refuses_an_oversized_feed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class Big:
@@ -138,7 +144,7 @@ class TestFetch:
 
         monkeypatch.setattr(dealnews._OPENER, "open", lambda *a, **k: Big())  # noqa: SLF001
         with pytest.raises(ValueError, match="larger"):
-            dealnews.fetch()
+            dealnews.fetch(dealnews.FEEDS[0])
 
     def test_redirects_are_not_followed(self) -> None:
         assert dealnews._NoRedirects().redirect_request() is None  # noqa: SLF001
@@ -223,8 +229,9 @@ def add_rule(table: Any, user: str = USER, rid: str = "r1", **over: Any) -> None
     )
 
 
-def run(monkeypatch: pytest.MonkeyPatch, *items: str) -> dict[str, int]:
-    monkeypatch.setattr(feeds.dealnews, "fetch", lambda: feed(*items))
+def run(monkeypatch: pytest.MonkeyPatch, *items: str, black_friday: tuple[str, ...] = ()) -> dict[str, int]:
+    bodies = {dealnews.FEEDS[0]: feed(*items), dealnews.FEEDS[1]: feed(*black_friday)}
+    monkeypatch.setattr(feeds.dealnews, "fetch", lambda url: bodies[url])
     monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
     return feeds.handler({}, None)
 
@@ -309,7 +316,7 @@ class TestHandler:
             return 1
 
         monkeypatch.setattr(feeds, "notify", flaky)
-        with pytest.raises(RuntimeError, match="1 deal alerts failed"):
+        with pytest.raises(RuntimeError, match="1 deal alerts failed; feeds down: none"):
             run(monkeypatch, item("1"))
         assert sorted(calls) == [USER, OTHER] and len(deals_of(table, USER)) == 1
         assert deals_of(table, USER)[0]["pushed"] is False and deals_of(table, OTHER)[0]["pushed"] is True
@@ -323,7 +330,7 @@ class TestHandler:
         monkeypatch.setattr(feeds, "MAX_PUSHES", 2)
         calls: list[str] = []
         monkeypatch.setattr(feeds, "notify", lambda *a, **k: calls.append("x") or (_ for _ in ()).throw(RuntimeError("down")))
-        with pytest.raises(RuntimeError, match="2 deal alerts failed"):
+        with pytest.raises(RuntimeError, match="2 deal alerts failed; feeds down: none"):
             run(monkeypatch, *(item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(5)))
         assert len(calls) == 2
 
@@ -350,7 +357,7 @@ class TestHandler:
         assert sorted(r["keyword"] for r in rules[USER]) == ["k0", "k1", "k2"] and len(pages) > 1
 
     def test_a_feed_failure_is_an_error_not_a_silent_success(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-        def down() -> bytes:
+        def down(url: str) -> bytes:
             raise OSError("feed down")
 
         monkeypatch.setattr(feeds.dealnews, "fetch", down)
@@ -404,3 +411,81 @@ class TestNotifyStrict:
 
         monkeypatch.setattr(push, "send", gone)
         assert push.notify(table, USER, "t", "b", strict=True) == 0  # expired devices were just removed: nothing to retry
+
+
+class TestBlackFridayFeed:
+    @staticmethod
+    def sale(n: str = "9", title: str = "Carhartt Black Friday Deals: Up to 50% off + free shipping", **extra: str) -> str:
+        return item(n, title=title, price=None, retailer="Carhartt", category="Clothing & Accessories", **extra)
+
+    def test_a_store_sale_matches_a_store_keyword_and_is_saved_without_a_price(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="Carhartt")
+        assert run(monkeypatch, black_friday=(self.sale(),)) == {"deals": 1, "saved": 1, "pushed": 1}
+        (saved,) = deals_of(table)
+        assert "price" not in saved and saved["retailer"] == "Carhartt" and saved["keyword"] == "Carhartt"
+        assert pushes[0][1] == "New deal: Carhartt" and "Black Friday" in pushes[0][2]
+
+    def test_a_black_friday_keyword_catches_every_sale_and_a_price_ceiling_catches_none(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, USER, keyword="Black Friday")
+        add_rule(table, OTHER, keyword="Black Friday", maxPrice=Decimal("100"))  # sales have no price to compare
+        run(monkeypatch, black_friday=(self.sale("1"), self.sale("2", title="Best Buy Black Friday Sale")))
+        assert len(deals_of(table, USER)) == 2 and deals_of(table, OTHER) == []
+
+    def test_a_deal_in_both_feeds_counts_once(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="OLED")
+        assert run(monkeypatch, item("1"), black_friday=(item("1"), item("2", title="OLED sale")))["saved"] == 2
+        assert len(pushes) == 2 and len(deals_of(table)) == 2
+
+    @staticmethod
+    def one_feed_down(monkeypatch: pytest.MonkeyPatch, down: str) -> None:
+        def fetch(url: str) -> bytes:
+            if url == down:
+                raise OSError("feed down")
+            return feed(item("1"))
+
+        monkeypatch.setattr(feeds.dealnews, "fetch", fetch)
+        monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
+
+    def test_the_seasonal_feed_going_away_is_not_an_error(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="OLED")
+        self.one_feed_down(monkeypatch, dealnews.BLACK_FRIDAY_FEED)
+        assert feeds.handler({}, None) == {"deals": 1, "saved": 1, "pushed": 1}  # after the season the feed may 404: stay green
+
+    def test_the_main_feed_down_still_alerts_from_the_other_and_is_reported(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="OLED")
+        self.one_feed_down(monkeypatch, dealnews.MAIN_FEED)
+        with pytest.raises(RuntimeError, match=r"0 deal alerts failed; feeds down: https://www.dealnews.com/\?rss=1"):
+            feeds.handler({}, None)
+        assert len(pushes) == 1 and len(deals_of(table)) == 1  # the working feed was still processed
+
+    def test_both_feeds_down_raises_the_first_error(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        errors = iter([OSError("main down"), OSError("black friday down")])
+
+        def fetch(url: str) -> bytes:
+            raise next(errors)
+
+        monkeypatch.setattr(feeds.dealnews, "fetch", fetch)
+        with pytest.raises(OSError, match="main down"):
+            feeds.handler({}, None)
+
+    def test_the_same_deal_tagged_differently_by_each_feed_counts_once(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="OLED")
+        main = item("1")  # guid ...?iref=rss
+        black_friday = main.replace("iref=rss", "iref=rss-f1676")  # what the real Black Friday feed does
+        assert main != black_friday and run(monkeypatch, main, black_friday=(black_friday,))["saved"] == 1
+        assert len(pushes) == 1 and len(deals_of(table)) == 1
+
+    def test_old_sales_do_not_alert(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="Carhartt")
+        assert run(monkeypatch, black_friday=(self.sale(minutes_ago=60 * 24 * 7),))["saved"] == 0  # posted a week ago
+        assert pushes == []

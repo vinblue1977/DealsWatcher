@@ -99,6 +99,7 @@ export function Keywords() {
           Highest price (optional)
         </label>
         <input id="kwmax" class="text" inputMode="decimal" autoComplete="off" maxLength={9} placeholder="Highest price, optional, e.g. 1200" value={max} onInput={typing(setMax)} />
+        <div class="muted small">A highest price skips store-wide sales, which have no price.</div>
       </form>
 
       {loadError && (

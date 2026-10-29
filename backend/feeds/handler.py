@@ -1,4 +1,4 @@
-"""Feed checker Lambda: every 30 minutes, reads the Dealnews feed and alerts users whose keyword rules match new deals."""
+"""Feed checker Lambda: every 30 minutes, reads the Dealnews feeds and alerts users whose keyword rules match new deals."""
 
 import logging
 import os
@@ -18,6 +18,28 @@ SOURCE = "dealnews"
 MAX_AGE_HOURS = 6  # a first run, or a long outage, must not alert on old deals
 KEEP_DAYS = 30
 MAX_PUSHES = 5  # per user per run; deals over the cap stay unsent and go out on the next run
+
+
+def _read_feeds() -> tuple[list[dict[str, Any]], list[str]]:
+    """Deals from every feed, newest first, each deal once (one in two feeds counts once), and the required feeds that failed.
+
+    One feed being down must not hide the other's deals. If every feed fails, the first error is raised. A failing optional
+    feed (the seasonal Black Friday one) is only logged, so it cannot keep the checker permanently red.
+    """
+    deals: dict[str, dict[str, Any]] = {}
+    down: list[str] = []
+    first_error: Exception | None = None
+    for url in dealnews.FEEDS:
+        try:
+            for deal in dealnews.parse(dealnews.fetch(url)):
+                deals.setdefault(deal["id"], deal)
+        except Exception as e:
+            log.exception("feed could not be read: %s", url)
+            first_error = first_error or e
+            down.append(url)
+    if len(down) == len(dealnews.FEEDS) and first_error is not None:
+        raise first_error
+    return sorted(deals.values(), key=lambda d: d["published"], reverse=True), [u for u in down if u in dealnews.REQUIRED]
 
 
 def _rules_by_user(table: Any) -> dict[str, list[dict[str, Any]]]:
@@ -73,7 +95,8 @@ def _claim(table: Any, user: str, deal: dict[str, Any], rule: dict[str, Any], no
 def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
     table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])  # pyright: ignore[reportAttributeAccessIssue]
     now = datetime.now(UTC)
-    deals = dealnews.age_limit(now, dealnews.parse(dealnews.fetch()), MAX_AGE_HOURS)
+    found, feeds_down = _read_feeds()
+    deals = dealnews.age_limit(now, found, MAX_AGE_HOURS)
     saved = pushed = failed = 0
     for user, rules in _rules_by_user(table).items():
         attempts = 0
@@ -92,6 +115,6 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
             except Exception:
                 log.exception("deal alert failed")
                 failed += 1
-    if failed:
-        raise RuntimeError(f"{failed} deal alerts failed")  # shows as a Lambda error; the unsent ones are retried next run
+    if failed or feeds_down:  # shows as a Lambda error; unsent alerts are retried next run
+        raise RuntimeError(f"{failed} deal alerts failed; feeds down: {', '.join(feeds_down) or 'none'}")
     return {"deals": len(deals), "saved": saved, "pushed": pushed}
