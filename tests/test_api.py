@@ -383,3 +383,46 @@ def test_deals_hide_the_expiry_and_delivery_flag(table: Any) -> None:
     )
     (deal,) = call("GET /me/deals")[1]["deals"]
     assert deal == {"title": "t", "id": "DEAL#2026-10-29T10:00:00Z#abc"}
+
+
+def test_a_second_user_cannot_see_or_change_anything_of_the_first(table: Any) -> None:
+    watch = add_watch()
+    rule = call("POST /me/rules", {"keyword": "OLED"})[1]
+    assert call("PUT /me/push", SUBSCRIPTION)[0] == 200
+    table.put_item(Item={"PK": f"USER#{USER}", "SK": "DEAL#abc", "title": "mine", "publishedAt": "2026-10-28T10:00:00+00:00"})
+
+    # lists
+    assert call("GET /me/watches", user=OTHER)[1] == {"watches": []}
+    assert call("GET /me/rules", user=OTHER)[1] == {"rules": []}
+    assert call("GET /me/deals", user=OTHER)[1] == {"deals": []}
+    assert call("POST /me/push/status", {"endpoint": ENDPOINT}, user=OTHER)[1] == {"devices": 0, "thisDevice": False}
+
+    # by id: every way of reaching the first user's items answers "not found"
+    for method, body in (("GET", None), ("PUT", {"title": "hijacked"}), ("DELETE", None)):
+        assert call(f"{method} /me/watches/{{id}}", body, item_id=watch["id"], user=OTHER)[0] == 404
+    for method, body in (("PUT", {"keyword": "hijacked"}), ("DELETE", None)):
+        assert call(f"{method} /me/rules/{{id}}", body, item_id=rule["id"], user=OTHER)[0] == 404
+    assert call("POST /me/push/test", {"endpoint": ENDPOINT}, user=OTHER)[0] == 404  # not theirs to alert
+    call("DELETE /me/push", {"endpoint": ENDPOINT}, user=OTHER)  # removes nothing of the first user's
+
+    # a request cannot name another account: extra fields are ignored, the token decides
+    status, mine = call("POST /me/watches", {"url": OTHER_URL, "targetPrice": 5, "PK": f"USER#{USER}", "user": USER}, user=OTHER)
+    assert status == 201 and [w["id"] for w in call("GET /me/watches", user=OTHER)[1]["watches"]] == [mine["id"]]
+
+    # and the first user's data is exactly as it was
+    assert [w["title"] for w in call("GET /me/watches")[1]["watches"]] == [watch["title"]]
+    assert [r["keyword"] for r in call("GET /me/rules")[1]["rules"]] == ["OLED"]
+    assert [d["title"] for d in call("GET /me/deals")[1]["deals"]] == ["mine"]
+    assert call("POST /me/push/status", {"endpoint": ENDPOINT})[1] == {"devices": 1, "thisDevice": True}
+
+
+def test_every_route_refuses_a_request_without_a_signed_in_user() -> None:
+    for route in (
+        "GET /me/watches",
+        "POST /me/watches",
+        "GET /me/rules",
+        "GET /me/deals",
+        "POST /me/push/status",
+        "PUT /me/push",
+    ):
+        assert call(route, {}, user=None)[0] == 401
