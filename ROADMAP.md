@@ -13,7 +13,7 @@ Cost target ≈ $0.10–0.50/month (AWS Budget alert as a cap).
 - [ ] Phase 3: hosting, passkey sign-in (365-day session), API, app sign-in code. No alarms or alert email yet
 - [ ] Phase 4: PWA shell + push
 - [ ] Phase 5: alert email topic + one crash alarm per checker (each alarm past the account's free 10 costs ~$0.10/month); price checker (Best Buy first; then best-effort Target, Walmart, Tennis Warehouse, Costco). Before starting, test real product pages for Tennis Warehouse and Costco, ideally from AWS
-- [x] Phase 6: feed checker for Dealnews (`dealnews.com/?rss=1`, every 30 minutes). Slickdeals and Reddit are not read: both disallow automated access in robots.txt (Reddit's official API needs your own credentials)
+- [x] Phase 6: feed checker for Dealnews (`dealnews.com/?rss=1` and its Black Friday feed `dealnews.com/f1676/Black-Friday/?rss=1`, every 30 minutes). Slickdeals and Reddit are not read: both disallow automated access in robots.txt (Reddit's official API needs your own credentials)
 - [ ] Phase 7: Black Friday polish
 
 ## Later

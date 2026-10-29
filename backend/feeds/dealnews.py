@@ -1,4 +1,4 @@
-"""The Dealnews deals feed: public RSS at dealnews.com/?rss=1 (its robots.txt allows it; polled every 30 minutes)."""
+"""The Dealnews feeds: public RSS (its robots.txt allows it; polled every 30 minutes): the main deals feed and Black Friday."""
 
 import hashlib
 import re
@@ -10,7 +10,10 @@ from typing import Any
 from urllib.parse import urlsplit
 from xml.etree import ElementTree  # noqa: S405 - bodies with a DOCTYPE or ENTITY are refused before parsing
 
-FEED_URL = "https://www.dealnews.com/?rss=1"
+MAIN_FEED = "https://www.dealnews.com/?rss=1"  # the latest deals
+BLACK_FRIDAY_FEED = "https://www.dealnews.com/f1676/Black-Friday/?rss=1"  # store-wide sales, mostly without a price
+FEEDS = (MAIN_FEED, BLACK_FRIDAY_FEED)
+REQUIRED = (MAIN_FEED,)  # the Black Friday feed is seasonal: if it disappears, that is logged, not an error
 USER_AGENT = "DealsWatcher/1.0 (personal deal alerts; +https://github.com/vinblue1977/DealsWatcher)"
 MAX_BYTES = 2_000_000
 _PRICE = re.compile(r"\d{1,5}(\.\d{1,2})?")
@@ -20,7 +23,7 @@ _NS = "{https://www.dealnews.com/ns/rss/1.0.htm}"
 
 
 class _NoRedirects(urllib.request.HTTPRedirectHandler):
-    """A redirect is treated as an error: the feed has one fixed address."""
+    """A redirect is treated as an error: each feed has one fixed address."""
 
     def redirect_request(self, *args: Any, **kwargs: Any) -> None:
         return None
@@ -29,9 +32,12 @@ class _NoRedirects(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_NoRedirects)
 
 
-def fetch() -> bytes:
-    request = urllib.request.Request(  # noqa: S310 - one fixed https address
-        FEED_URL, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/xml;q=0.9"}
+def fetch(url: str) -> bytes:
+    """One of FEEDS. Anything else is refused, so this can only ever reach the addresses listed above."""
+    if url not in FEEDS:
+        raise ValueError("not a known feed")
+    request = urllib.request.Request(  # noqa: S310 - only the fixed https addresses in FEEDS
+        url, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/xml;q=0.9"}
     )
     with _OPENER.open(request, timeout=10) as response:
         body = response.read(MAX_BYTES + 1)
@@ -45,6 +51,12 @@ def _own_link(link: str) -> bool:
     host = parts.hostname or ""
     ours = host == "dealnews.com" or host.endswith(".dealnews.com")
     return parts.scheme == "https" and not parts.username and not parts.password and ours
+
+
+def _deal_id(guid: str) -> str:
+    """The same deal has the same id in every feed: feeds tag its guid differently (?iref=rss, ?iref=rss-f1676)."""
+    parts = urlsplit(guid)
+    return hashlib.sha256(f"{parts.netloc}{parts.path}".encode()).hexdigest()[:12]
 
 
 def _price(text: str | None) -> Decimal | None:
@@ -71,7 +83,7 @@ def parse(body: bytes) -> list[dict[str, Any]]:
             continue
         deals.append(
             {
-                "id": hashlib.sha256(guid.encode()).hexdigest()[:12],
+                "id": _deal_id(guid),
                 "title": title[:300],
                 "url": link,
                 "price": _price(field.get(_NS + "price")),
