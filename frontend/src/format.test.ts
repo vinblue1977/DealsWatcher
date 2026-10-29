@@ -105,11 +105,15 @@ describe('deal feed links', () => {
 });
 
 describe('ruleLine', () => {
-  const rule = (over: Partial<Rule> = {}): Rule => ({ id: 'a', keyword: 'OLED', maxPrice: 1200, sources: ['slickdeals', 'reddit'], enabled: true, createdAt: '', ...over });
-  it('describes price, feeds and paused state', () => {
-    expect(ruleLine(rule())).toBe('Under $1,200 · Slickdeals, Reddit');
-    expect(ruleLine(rule({ maxPrice: null, sources: ['dealnews', 'reddit', 'slickdeals'] }))).toBe('Any price · all feeds');
-    expect(ruleLine(rule({ enabled: false }))).toBe('Under $1,200 · Slickdeals, Reddit · Paused');
+  const rule = (over: Partial<Rule> = {}): Rule => ({ id: 'a', keyword: 'OLED', maxPrice: 1200, sources: ['dealnews'], enabled: true, createdAt: '', ...over });
+  it('describes price, feed and paused state', () => {
+    expect(ruleLine(rule())).toBe('Under $1,200 · Dealnews');
+    expect(ruleLine(rule({ maxPrice: null }))).toBe('Any price · Dealnews');
+    expect(ruleLine(rule({ enabled: false }))).toBe('Under $1,200 · Dealnews · Paused');
+  });
+  it('names only the feeds that are read, even if an older rule lists more', () => {
+    expect(ruleLine(rule({ sources: ['dealnews', 'reddit', 'slickdeals'] }))).toBe('Under $1,200 · Dealnews');
+    expect(ruleLine(rule({ sources: ['reddit'] }))).toBe('Under $1,200 · No active feed');
   });
 });
 

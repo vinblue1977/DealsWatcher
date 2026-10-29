@@ -1,0 +1,406 @@
+"""Feed checker: parsing the Dealnews feed, keyword matching, and saving and alerting once per deal."""
+
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from email.utils import format_datetime
+from typing import Any
+
+import boto3
+import pytest
+from moto import mock_aws
+
+from feeds import dealnews
+from feeds import handler as feeds
+from feeds.matching import matches
+from push import notify as push
+
+NOW = datetime(2026, 10, 29, 12, 0, tzinfo=UTC)
+
+
+def item(
+    n: str = "1",
+    title: str = "LG C5 OLED TV for $1,099 + free shipping",
+    price: str | None = "1099.00",
+    minutes_ago: int = 30,
+    **extra: str,
+) -> str:
+    fields = {
+        "title": title,
+        "link": f"https://www.dealnews.com/deal-{n}",
+        "guid": f"https://www.dealnews.com/{n}.html?iref=rss",
+        "pubDate": format_datetime(NOW - timedelta(minutes=minutes_ago)),
+        "retailer": "Best Buy",
+        "category": "TVs",
+        **({"price": price} if price is not None else {}),
+        **extra,
+    }
+    tags = {("dn:" + k if k in ("retailer", "category", "price") else k): v for k, v in fields.items()}  # the feed's own fields
+    return "<item>" + "".join(f"<{k}>{v}</{k}>" for k, v in tags.items()) + "</item>"
+
+
+def feed(*items: str) -> bytes:
+    namespaces = 'xmlns:dn="https://www.dealnews.com/ns/rss/1.0.htm" xmlns:media="http://search.yahoo.com/mrss/"'
+    return f'<?xml version="1.0"?><rss version="2.0" {namespaces}><channel>{"".join(items)}</channel></rss>'.encode()
+
+
+class TestParse:
+    def test_reads_deals(self) -> None:
+        (deal,) = dealnews.parse(feed(item()))
+        assert deal["title"].startswith("LG C5 OLED") and deal["price"] == Decimal("1099.00")
+        assert deal["retailer"] == "Best Buy" and deal["category"] == "TVs" and deal["published"] == NOW - timedelta(minutes=30)
+        assert len(deal["id"]) == 12 and deal["url"] == "https://www.dealnews.com/deal-1"
+
+    def test_prices_are_optional_and_must_look_like_prices(self) -> None:
+        deals = dealnews.parse(
+            feed(
+                item("1", price=None),
+                item("2", price="free"),
+                item("3", price="0"),
+                item("4", price="-5"),
+                item("5", price="199.2"),
+            )
+        )
+        assert [d["price"] for d in deals] == [None, None, None, None, Decimal("199.2")]
+
+    def test_skips_incomplete_items_and_links_to_other_sites(self) -> None:
+        bad = [
+            item("1", title=""),
+            item("2", pubDate="not a date"),
+            item("3", link="https://evil.example/deal"),
+            item("4", link="http://www.dealnews.com/deal"),
+            item("5", link=f"https://user:pw{'@'}www.dealnews.com/deal"),  # credentials in the link
+            item("6", link="https://dealnews.com.evil.example/deal"),
+            item("7", guid=""),
+        ]
+        assert dealnews.parse(feed(*bad, item("8"))) == dealnews.parse(feed(item("8")))
+        assert len(dealnews.parse(feed(*bad, item("8")))) == 1
+
+    def test_refuses_xml_with_entities(self) -> None:
+        body = b'<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY a "aaaa">]><rss><channel><item><title>&a;</title></item></channel></rss>'  # noqa: E501
+        with pytest.raises(ValueError, match="refuse"):
+            dealnews.parse(body)
+
+    def test_long_titles_are_cut_and_other_namespaces_cannot_overwrite_fields(self) -> None:
+        extra = (
+            '<media:title>Other</media:title><media:category>Other</media:category><media:content url="https://x.example/i.jpg"/>'
+        )
+        (deal,) = dealnews.parse(feed(item(title="x" * 500).replace("</item>", extra + "</item>")))
+        assert len(deal["title"]) == 300 and deal["category"] == "TVs" and deal["url"] == "https://www.dealnews.com/deal-1"
+
+    def test_refuses_utf16_so_a_hidden_doctype_cannot_slip_past(self) -> None:
+        wide = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE rss [<!ENTITY a "aaaa">]><rss><channel/></rss>'.encode("utf-16")
+        for body in (wide, b"\xff\xfe<rss/>", b"<rss>\x00</rss>"):
+            with pytest.raises(ValueError, match="refuse"):
+                dealnews.parse(body)
+
+    def test_age_limit_drops_old_and_future_deals(self) -> None:
+        deals = dealnews.parse(feed(item("1", minutes_ago=30), item("2", minutes_ago=60 * 7), item("3", minutes_ago=-10)))
+        assert [d["url"][-1] for d in dealnews.age_limit(NOW, deals, 6)] == ["1"]
+
+
+class TestFetch:
+    def test_returns_the_body_and_identifies_itself(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        seen = {}
+
+        class Response:
+            def __enter__(self) -> Response:
+                return self
+
+            def __exit__(self, *exc: object) -> None:
+                return None
+
+            def read(self, limit: int) -> bytes:
+                return b"x" * min(limit, 10)
+
+        def open_(request: Any, timeout: int) -> Response:
+            seen["ua"], seen["url"], seen["timeout"] = request.get_header("User-agent"), request.full_url, timeout
+            return Response()
+
+        monkeypatch.setattr(dealnews._OPENER, "open", open_)  # noqa: SLF001
+        assert dealnews.fetch() == b"x" * 10
+        assert (
+            seen["ua"].startswith("DealsWatcher/1.0")
+            and seen["url"] == "https://www.dealnews.com/?rss=1"
+            and seen["timeout"] == 10
+        )
+
+    def test_refuses_an_oversized_feed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        class Big:
+            def __enter__(self) -> Big:
+                return self
+
+            def __exit__(self, *exc: object) -> None:
+                return None
+
+            def read(self, limit: int) -> bytes:
+                return b"x" * limit
+
+        monkeypatch.setattr(dealnews._OPENER, "open", lambda *a, **k: Big())  # noqa: SLF001
+        with pytest.raises(ValueError, match="larger"):
+            dealnews.fetch()
+
+    def test_redirects_are_not_followed(self) -> None:
+        assert dealnews._NoRedirects().redirect_request() is None  # noqa: SLF001
+
+
+DEAL = {"title": "Apple AirPods Pro 3 for $199", "price": Decimal("199"), "retailer": "Amazon", "category": "Headphones"}
+
+
+def rule(**over: Any) -> dict[str, Any]:
+    return {"keyword": "AirPods", "maxPrice": None, "sources": ["dealnews"], "enabled": True, **over}
+
+
+class TestMatching:
+    @pytest.mark.parametrize(
+        ("keyword", "expected"),
+        [
+            ("airpods", True),
+            ("AirPods Pro", True),
+            ("pro 3", True),
+            ("amazon", True),
+            ("headphone", True),
+            ("pod", False),
+            ("TV", False),
+            ("Pro 33", False),
+        ],
+    )
+    def test_whole_words_in_title_store_or_category(self, keyword: str, expected: bool) -> None:
+        assert matches(rule(keyword=keyword), DEAL, "dealnews") is expected
+
+    def test_es_plurals_match_too(self) -> None:
+        assert matches(rule(keyword="box"), {**DEAL, "title": "Storage Boxes for $20"}, "dealnews")
+        assert not matches(rule(keyword="box"), {**DEAL, "title": "Boxer shorts"}, "dealnews")
+
+    def test_keywords_with_symbols_are_taken_literally(self) -> None:
+        assert not matches(rule(keyword="A.*"), DEAL, "dealnews")
+        assert matches(rule(keyword="$199"), {**DEAL, "title": "Sale $199 today"}, "dealnews")
+
+    def test_price_ceiling_needs_a_known_price(self) -> None:
+        assert matches(rule(maxPrice=Decimal("200")), DEAL, "dealnews")
+        assert matches(rule(maxPrice=Decimal("199")), DEAL, "dealnews")
+        assert not matches(rule(maxPrice=Decimal("150")), DEAL, "dealnews")
+        assert not matches(rule(maxPrice=Decimal("200")), {**DEAL, "price": None}, "dealnews")
+        assert matches(rule(), {**DEAL, "price": None}, "dealnews")
+
+    def test_rule_must_be_on_and_listen_to_the_source(self) -> None:
+        assert not matches(rule(enabled=False), DEAL, "dealnews")
+        assert not matches(rule(sources=["reddit"]), DEAL, "dealnews")
+
+
+USER, OTHER = "user-1", "user-2"
+
+
+@pytest.fixture
+def table(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
+    monkeypatch.setenv("TABLE_NAME", "test-table")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-2")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    with mock_aws():
+        db = boto3.resource("dynamodb")
+        db.create_table(
+            TableName="test-table",
+            KeySchema=[{"AttributeName": "PK", "KeyType": "HASH"}, {"AttributeName": "SK", "KeyType": "RANGE"}],
+            AttributeDefinitions=[{"AttributeName": "PK", "AttributeType": "S"}, {"AttributeName": "SK", "AttributeType": "S"}],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        yield db.Table("test-table")
+
+
+@pytest.fixture
+def pushes(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str, str, str]]:
+    sent: list[tuple[str, str, str, str]] = []
+    monkeypatch.setattr(
+        feeds, "notify", lambda table, user, title, body, url="/", **kw: sent.append((user, title, body, url)) or 1
+    )
+    return sent
+
+
+def add_rule(table: Any, user: str = USER, rid: str = "r1", **over: Any) -> None:
+    table.put_item(
+        Item={"PK": f"USER#{user}", "SK": f"RULE#{rid}", "id": rid, "createdAt": f"2026-10-01T00:00:{rid[-1]}Z", **rule(**over)}
+    )
+
+
+def run(monkeypatch: pytest.MonkeyPatch, *items: str) -> dict[str, int]:
+    monkeypatch.setattr(feeds.dealnews, "fetch", lambda: feed(*items))
+    monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
+    return feeds.handler({}, None)
+
+
+def deals_of(table: Any, user: str = USER) -> list[dict[str, Any]]:
+    return [i for i in table.scan()["Items"] if i["PK"] == f"USER#{user}" and i["SK"].startswith("DEAL#")]
+
+
+class TestHandler:
+    def test_saves_a_matching_deal_and_alerts_once(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="OLED")
+        assert run(monkeypatch, item("1"), item("2", title="Dyson Vacuum for $300")) == {"deals": 2, "saved": 1, "pushed": 1}
+        (saved,) = deals_of(table)
+        assert saved["title"].startswith("LG C5") and saved["keyword"] == "OLED" and saved["source"] == "dealnews"
+        assert (
+            saved["price"] == Decimal("1099.00")
+            and saved["retailer"] == "Best Buy"
+            and saved["SK"].startswith("DEAL#")
+            and len(saved["SK"]) == len("DEAL#") + 12
+        )
+        assert saved["ttl"] > int(NOW.timestamp()) and saved["url"] == "https://www.dealnews.com/deal-1"
+        assert saved["pushed"] is True and saved["publishedAt"] == "2026-10-29T11:30:00+00:00" and "seenAt" not in saved
+        assert pushes == [(USER, "New deal: OLED", saved["title"], "/#/deals")]
+
+    def test_running_again_does_not_repeat_the_alert(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="OLED")
+        run(monkeypatch, item("1"))
+        assert run(monkeypatch, item("1"))["saved"] == 0
+        assert len(pushes) == 1 and len(deals_of(table)) == 1
+
+    def test_each_user_gets_only_their_own_matches(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, USER, keyword="OLED")
+        add_rule(table, OTHER, keyword="vacuum", maxPrice=Decimal("100"))
+        run(monkeypatch, item("1"), item("2", title="Dyson vacuum for $300", price="300"))
+        assert len(deals_of(table, USER)) == 1 and deals_of(table, OTHER) == []
+        assert [p[0] for p in pushes] == [USER]
+
+    def test_one_deal_matching_two_rules_is_saved_once(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, rid="r2", keyword="LG")
+        add_rule(table, rid="r1", keyword="OLED")  # older: always the one that names the deal
+        assert run(monkeypatch, item("1"))["saved"] == 1 and len(pushes) == 1
+        assert deals_of(table)[0]["keyword"] == "OLED" and pushes[0][1] == "New deal: OLED"
+
+    def test_turned_off_rules_other_sources_and_old_deals_are_ignored(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, rid="off", keyword="OLED", enabled=False)
+        add_rule(table, rid="reddit", keyword="OLED", sources=["reddit"])
+        add_rule(table, rid="on", keyword="Dyson")
+        assert run(monkeypatch, item("1"), item("2", title="Dyson Vacuum", minutes_ago=60 * 8))["saved"] == 0
+        assert pushes == [] and deals_of(table) == []
+
+    def test_a_deal_without_a_price_is_saved_without_one(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="sale")
+        run(monkeypatch, item("1", title="Jomashop Pre-Holiday Sale: Up to 75% off", price=None))
+        (saved,) = deals_of(table)
+        assert "price" not in saved
+
+    def test_pushes_are_capped_per_run_and_the_rest_go_out_on_the_next_run(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="TV")
+        monkeypatch.setattr(feeds, "MAX_PUSHES", 2)
+        items = [item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(4)]
+        assert run(monkeypatch, *items)["saved"] == 4 and len(pushes) == 2
+        assert run(monkeypatch, *items) == {"deals": 4, "saved": 0, "pushed": 2}  # the two left over, none repeated
+        assert len(pushes) == 4 and len({p[2] for p in pushes}) == 4
+        assert run(monkeypatch, *items)["pushed"] == 0
+
+    def test_a_failed_push_is_reported_retried_and_does_not_stop_others(
+        self, table: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, USER, keyword="OLED")
+        add_rule(table, OTHER, keyword="OLED")
+        calls: list[str] = []
+        down = {"on": True}
+
+        def flaky(table: Any, user: str, title: str, body: str, url: str = "/", **kw: Any) -> int:
+            calls.append(user)
+            if user == USER and down["on"]:
+                raise RuntimeError("push service down")
+            return 1
+
+        monkeypatch.setattr(feeds, "notify", flaky)
+        with pytest.raises(RuntimeError, match="1 deal alerts failed"):
+            run(monkeypatch, item("1"))
+        assert sorted(calls) == [USER, OTHER] and len(deals_of(table, USER)) == 1
+        assert deals_of(table, USER)[0]["pushed"] is False and deals_of(table, OTHER)[0]["pushed"] is True
+        down["on"] = False
+        assert run(monkeypatch, item("1")) == {"deals": 1, "saved": 0, "pushed": 1}  # the missed alert goes out now
+        assert deals_of(table, USER)[0]["pushed"] is True
+        assert run(monkeypatch, item("1"))["pushed"] == 0
+
+    def test_a_failing_push_still_counts_toward_the_cap(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="TV")
+        monkeypatch.setattr(feeds, "MAX_PUSHES", 2)
+        calls: list[str] = []
+        monkeypatch.setattr(feeds, "notify", lambda *a, **k: calls.append("x") or (_ for _ in ()).throw(RuntimeError("down")))
+        with pytest.raises(RuntimeError, match="2 deal alerts failed"):
+            run(monkeypatch, *(item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(5)))
+        assert len(calls) == 2
+
+    def test_a_broken_rule_does_not_stop_the_run(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        table.put_item(Item={"PK": f"USER#{USER}", "SK": "RULE#bad1", "enabled": True, "sources": ["dealnews"]})  # no keyword
+        table.put_item(Item={"PK": f"USER#{USER}", "SK": "RULE#bad2", "enabled": True, "keyword": " ", "sources": ["dealnews"]})
+        table.put_item(Item={"PK": f"USER#{USER}", "SK": "RULE#bad3", "enabled": True, "keyword": "OLED", "sources": "dealnews"})
+        add_rule(table, OTHER, keyword="OLED")
+        assert run(monkeypatch, item("1"))["saved"] == 1 and [p[0] for p in pushes] == [OTHER]
+
+    def test_finds_rules_across_scan_pages(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        for n in range(3):
+            add_rule(table, rid=f"r{n}", keyword=f"k{n}")
+        real = table.scan
+        pages = []
+
+        def paged(**kwargs: Any) -> dict[str, Any]:
+            kwargs["Limit"] = 1  # a tiny page size forces following LastEvaluatedKey
+            pages.append(1)
+            return real(**kwargs)
+
+        monkeypatch.setattr(table, "scan", paged)
+        rules = feeds._rules_by_user(table)  # noqa: SLF001
+        assert sorted(r["keyword"] for r in rules[USER]) == ["k0", "k1", "k2"] and len(pages) > 1
+
+    def test_a_feed_failure_is_an_error_not_a_silent_success(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        def down() -> bytes:
+            raise OSError("feed down")
+
+        monkeypatch.setattr(feeds.dealnews, "fetch", down)
+        with pytest.raises(OSError, match="feed down"):
+            feeds.handler({}, None)
+
+
+class TestDelivery:
+    def test_a_deal_whose_publish_time_changes_is_still_the_same_deal(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="OLED")
+        run(monkeypatch, item("1", minutes_ago=30))
+        assert run(monkeypatch, item("1", minutes_ago=5))["saved"] == 0  # same guid, newer pubDate
+        assert len(pushes) == 1 and len(deals_of(table)) == 1
+
+
+class TestNotifyStrict:
+    @pytest.fixture
+    def devices(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("VAPID_SUBJECT", "https://example.com")
+        monkeypatch.setattr(push, "_private_key", lambda: "key")
+        for name in ("a", "b"):
+            endpoint = f"https://web.push.apple.com/{name}"
+            sub = {"endpoint": endpoint}
+            table.put_item(Item={"PK": f"USER#{USER}", "SK": push.device_key(endpoint), "subscription": sub})
+
+    def test_raises_when_every_device_send_fails_so_the_alert_can_be_retried(
+        self, table: Any, devices: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def down(*args: Any, **kwargs: Any) -> None:
+            raise OSError("push service down")
+
+        monkeypatch.setattr(push, "send", down)
+        assert push.notify(table, USER, "t", "b") == 0  # the default stays quiet
+        with pytest.raises(RuntimeError, match="every device"):
+            push.notify(table, USER, "t", "b", strict=True)
+
+    def test_one_working_device_or_only_expired_ones_is_not_a_failure(
+        self, table: Any, devices: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def one_works(subscription: dict, *args: Any, **kwargs: Any) -> None:
+            if subscription["endpoint"].endswith("/a"):
+                raise OSError("down")
+
+        monkeypatch.setattr(push, "send", one_works)
+        assert push.notify(table, USER, "t", "b", strict=True) == 1
+
+        def gone(*args: Any, **kwargs: Any) -> None:
+            raise push.Gone
+
+        monkeypatch.setattr(push, "send", gone)
+        assert push.notify(table, USER, "t", "b", strict=True) == 0  # expired devices were just removed: nothing to retry

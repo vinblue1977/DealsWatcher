@@ -1,6 +1,6 @@
 # DealsWatcher
 
-An iPhone-first deal watcher (PWA) on serverless AWS: watch product prices against a target, match deal-feed keywords (Slickdeals, Reddit), and get push notifications on your Home Screen app.
+An iPhone-first deal watcher (PWA) on serverless AWS: watch product prices against a target, match deal-feed keywords (Dealnews), and get push notifications on your Home Screen app.
 
 Status: skeleton. CI is in place; AWS resources and screens come next (see [ROADMAP.md](ROADMAP.md)).
 
