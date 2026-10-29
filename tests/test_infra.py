@@ -183,3 +183,16 @@ def test_no_alarms_or_alert_topic_yet() -> None:
     template = _template()
     template.resource_count_is("AWS::CloudWatch::Alarm", 0)
     template.resource_count_is("AWS::SNS::Topic", 0)
+
+
+def test_api_function_can_only_use_the_table_operations_it_needs() -> None:
+    policies = _template().find_resources("AWS::IAM::Policy")
+    actions = {
+        action
+        for policy in policies.values()
+        if any(str(role.get("Ref", "")).startswith("WebApi") for role in policy["Properties"]["Roles"])
+        for statement in policy["Properties"]["PolicyDocument"]["Statement"]
+        if "dynamodb:GetItem" in statement["Action"]
+        for action in statement["Action"]
+    }
+    assert actions == {"dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query"}

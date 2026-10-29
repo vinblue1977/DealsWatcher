@@ -307,3 +307,14 @@ def test_devices_follow_pages() -> None:
             return {"Items": [{"SK": "PUSH#b"}]}
 
     assert [d["SK"] for d in devices(Paged(), USER)] == ["PUSH#a", "PUSH#b"]
+
+
+def test_oversized_bodies_are_refused_before_any_route_runs() -> None:
+    event = {
+        "routeKey": "POST /me/rules",
+        "body": json.dumps({"keyword": "x" * 9000}),
+        "requestContext": {"authorizer": {"jwt": {"claims": {"sub": USER}}}},
+    }
+    response = api.handler(event, None)
+    assert response["statusCode"] == 413
+    assert call("GET /me/rules") == (200, {"rules": []})

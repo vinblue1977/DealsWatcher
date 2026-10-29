@@ -13,6 +13,7 @@ from push.notify import device_key, devices, notify
 from push.webpush import allowed_endpoint
 
 MAX_DEVICES = 10
+MAX_BODY = 8_192  # bytes; the largest real request (a push subscription) is under 1 KB
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -21,6 +22,8 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         user = event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]  # the user comes from the token, never the request
     except KeyError:
         return json_response(401, {"error": "unauthorized"})
+    if len((event.get("body") or "").encode()) > MAX_BODY:
+        return json_response(413, {"error": "request too large"})
     route = event.get("routeKey", "")
     item_id = (event.get("pathParameters") or {}).get("id", "")
     if route.partition(" ")[2].startswith("/me/watches"):

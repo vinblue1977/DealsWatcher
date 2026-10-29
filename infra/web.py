@@ -185,7 +185,8 @@ class Web(Construct):
             layers=[layer],
             log_group=logs.LogGroup(self, "ApiLogs", retention=logs.RetentionDays.TWO_WEEKS),
         )
-        table.grant_read_write_data(fn)
+        # Only what the API does: no Scan, no batch or transactional writes.
+        table.grant(fn, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query")
         # No crash alarm for the API: you are its only user and see errors in the app. Each alarm beyond the account's free 10
         # costs about $0.10 a month; alarms arrive with the checkers (Phases 5 and 6), where failures are silent.
         grant_vapid(fn)  # "send a test"
