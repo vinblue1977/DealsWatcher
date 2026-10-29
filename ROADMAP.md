@@ -13,11 +13,13 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 - [x] Phase 4: PWA screens (Watching, Add, Detail, Deals, Keywords, Settings), service worker, push notifications, install hint, app icon
 - [x] Phase 6: feed checker for Dealnews: the main feed (`dealnews.com/?rss=1`) and the Black Friday feed (`dealnews.com/f1676/Black-Friday/?rss=1`), every 30 minutes, keyword alerts with one push per deal
 - [x] Security hardening pass (least-privilege table access, request size cap, push endpoint kept out of URLs)
+- [x] Multi-user: invite-only accounts (no sign-up page), invitation email with setup steps, `scripts/invite_user.sh` and `scripts/remove_user.py` (removes the account and all of their data), per-user isolation tested on every route. See `docs/users.md`
 
 ## Next
 
 1. [ ] **Alert email + crash alarm for the feed checker** (SNS topic, one alarm; each alarm past the account's free 10 costs ~$0.10/month). **Needs you**: the address to alert. It goes in through deploy settings, never into the repo
-2. [ ] Phase 7: Black Friday polish (see App polish below); Black Friday 2026 is Nov 27
+2. [ ] Keep people signed in while they use the app: rotate refresh tokens so each renewal extends the session (today it is a fixed year from sign-in). Own small PR: it changes sign-in
+3. [ ] Phase 7: Black Friday polish (see App polish below); Black Friday 2026 is Nov 27
 
 ## Sources and feeds
 

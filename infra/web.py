@@ -128,6 +128,18 @@ class Web(Construct):
                 allowed_first_auth_factors=cognito.AllowedFirstAuthFactors(password=True, passkey=True)
             ),
             passkey_user_verification=cognito.PasskeyUserVerification.REQUIRED,
+            user_invitation=cognito.UserInvitationConfig(
+                email_subject="You are invited to DealsWatcher",
+                email_body=(
+                    "You have been invited to DealsWatcher, a private deal-alert app.\n\n"
+                    f"1. On your iPhone, open {site_url} in Safari.\n"
+                    "2. Sign in with your email address (your username is {username}) and the temporary password {####}. "
+                    "You will be asked to choose a new password.\n"
+                    "3. Tap Share, then Add to Home Screen, and open DealsWatcher from the Home Screen.\n"
+                    "4. In Settings, add a passkey (Face ID) and turn on notifications.\n\n"
+                    "The temporary password works for 3 days."
+                ),
+            ),
             account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
             feature_plan=cognito.FeaturePlan.ESSENTIALS,
             deletion_protection=True,
