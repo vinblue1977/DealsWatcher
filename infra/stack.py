@@ -10,6 +10,7 @@ from aws_cdk import aws_lambda as lambda_
 from cdk_nag import NagPackSuppression, NagSuppressions, RegexAppliesTo
 from constructs import Construct
 
+from infra.feeds import Feeds
 from infra.push import VAPID_PARAM
 from infra.web import Web
 
@@ -58,6 +59,7 @@ class DealsWatcherStack(Stack):
             layer=layer,
             push_env=push_env,
         )
+        Feeds(self, "Feeds", table=self.table, layer=layer, push_env=push_env)
 
         github_repo: str = self.node.try_get_context("githubRepo") or ""
         if github_repo:

@@ -95,7 +95,8 @@ export function summary(watches: Watch[], now = Date.now()): string {
 }
 
 const SOURCE_NAMES: Record<Source, string> = { dealnews: 'Dealnews', reddit: 'Reddit', slickdeals: 'Slickdeals' };
-export const SOURCES = Object.keys(SOURCE_NAMES) as Source[];
+// The feeds the checker reads (Slickdeals and Reddit disallow automated access); stored rules may still list others.
+export const ACTIVE_SOURCES: Source[] = ['dealnews'];
 
 export const sourceName = (source: Source | undefined): string => (source ? (SOURCE_NAMES[source] ?? source) : '');
 
@@ -104,10 +105,10 @@ export function safeLink(link: string | undefined): string | null {
   return link ? (httpsUrl(link)?.href ?? null) : null;
 }
 
-/** "Under $1,200 · Slickdeals, Reddit" (or "Any price · all feeds"), with "Paused" at the end when it is off. */
+/** "Under $1,200 · Dealnews" (or "Any price · Dealnews"), with "Paused" at the end when it is off. Only feeds that are read are named. */
 export function ruleLine(rule: Rule): string {
   const price = rule.maxPrice === null ? 'Any price' : `Under ${targetMoney(rule.maxPrice)}`;
-  const feeds = rule.sources.length === SOURCES.length ? 'all feeds' : rule.sources.map(sourceName).join(', ');
+  const feeds = rule.sources.filter((s) => ACTIVE_SOURCES.includes(s)).map(sourceName).join(', ') || 'No active feed';
   return [price, feeds, ...(rule.enabled ? [] : ['Paused'])].join(' · ');
 }
 

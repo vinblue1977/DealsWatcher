@@ -5,14 +5,14 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import boto3
-from boto3.dynamodb.conditions import Key
 
 from api import rules, watches
-from api.http import json_response, parse_object, view
+from api.http import json_response, parse_object, query_items, view
 from push.notify import device_key, devices, notify
 from push.webpush import allowed_endpoint
 
 MAX_DEVICES = 10
+MAX_DEALS = 100
 MAX_BODY = 8_192  # bytes; the largest real request (a push subscription) is under 1 KB
 
 
@@ -33,11 +33,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     if route.partition(" ")[2].startswith("/me/rules"):
         return rules.route(table, user, route, item_id, event.get("body"))
     if route == "GET /me/deals":
-        found = table.query(
-            KeyConditionExpression=Key("PK").eq(f"USER#{user}") & Key("SK").begins_with("DEAL#"),
-            ScanIndexForward=False,
-            Limit=100,
-        )["Items"]
+        found = sorted(query_items(table, user, "DEAL#"), key=lambda d: str(d.get("publishedAt", "")), reverse=True)[:MAX_DEALS]
         return json_response(200, {"deals": [{**view(d), "id": d["SK"]} for d in found]})  # id: a stable key for the app
     if route in ("POST /me/push/status", "PUT /me/push", "DELETE /me/push", "POST /me/push/test"):
         return _push(table, user, route, event)

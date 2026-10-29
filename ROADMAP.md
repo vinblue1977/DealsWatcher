@@ -13,7 +13,7 @@ Cost target ≈ $0.10–0.50/month (AWS Budget alert as a cap).
 - [ ] Phase 3: hosting, passkey sign-in (365-day session), API, app sign-in code. No alarms or alert email yet
 - [ ] Phase 4: PWA shell + push
 - [ ] Phase 5: alert email topic + one crash alarm per checker (each alarm past the account's free 10 costs ~$0.10/month); price checker (Best Buy first; then best-effort Target, Walmart, Tennis Warehouse, Costco). Before starting, test real product pages for Tennis Warehouse and Costco, ideally from AWS
-- [ ] Phase 6: feed checker (Slickdeals, Dealnews `dealnews.com/?rss=1`, Reddit r/deals and r/buildapcsales)
+- [x] Phase 6: feed checker for Dealnews (`dealnews.com/?rss=1`, every 30 minutes). Slickdeals and Reddit are not read: both disallow automated access in robots.txt (Reddit's official API needs your own credentials)
 - [ ] Phase 7: Black Friday polish
 
 ## Later
@@ -26,7 +26,8 @@ Cost target ≈ $0.10–0.50/month (AWS Budget alert as a cap).
 | Source | Kind | Expected reliability |
 |---|---|---|
 | Best Buy | Price (official API, free key) | High |
-| Slickdeals, Dealnews, Reddit | Deal feeds (RSS/JSON) | High |
-| Target, Walmart, Tennis Warehouse, Costco | Price (page parsing) | Best-effort; shown as "Can't check" when blocked |
+| Dealnews | Deal feed (public RSS, robots.txt allows it) | High |
+| Slickdeals, Reddit | Deal feeds | Not used: robots.txt disallows automated access. Reddit's official API (OAuth app, your own credentials) is the permitted route if wanted later |
+| Target, Walmart, Tennis Warehouse, Costco | Price (page parsing) | Not started: these sites' terms restrict automated access, and Target's price comes from an unofficial API. Decision (2026-10-28): feeds first, no store scraping |
 | Newegg | Deals via feeds only | Blocked by Cloudflare when probed; direct price tracking is a stretch goal |
 | Amazon | Not planned for v1 | Blocks scrapers |

@@ -196,3 +196,38 @@ def test_api_function_can_only_use_the_table_operations_it_needs() -> None:
         for action in statement["Action"]
     }
     assert actions == {"dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query"}
+
+
+def _feed_function(template: Template) -> dict:
+    (function,) = [
+        f
+        for f in template.find_resources("AWS::Lambda::Function").values()
+        if f["Properties"].get("Handler") == "feeds.handler.handler"
+    ]
+    return function["Properties"]
+
+
+def test_feed_checker_runs_every_30_minutes_with_a_short_timeout() -> None:
+    template = _template()
+    assert _feed_function(template)["Timeout"] == 60
+    template.has_resource_properties("AWS::Events::Rule", {"ScheduleExpression": "rate(30 minutes)", "State": "ENABLED"})
+
+
+def test_feed_checker_can_only_use_the_table_operations_it_needs() -> None:
+    policies = _template().find_resources("AWS::IAM::Policy")
+    actions = {
+        action
+        for policy in policies.values()
+        if any(str(role.get("Ref", "")).startswith("FeedsChecker") for role in policy["Properties"]["Roles"])
+        for statement in policy["Properties"]["PolicyDocument"]["Statement"]
+        if "dynamodb:Scan" in statement["Action"]
+        for action in statement["Action"]
+    }
+    assert actions == {
+        "dynamodb:Scan",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+    }

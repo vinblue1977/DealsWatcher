@@ -1,0 +1,97 @@
+"""Feed checker Lambda: every 30 minutes, reads the Dealnews feed and alerts users whose keyword rules match new deals."""
+
+import logging
+import os
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import boto3
+from boto3.dynamodb.conditions import Attr
+
+from feeds import dealnews
+from feeds.matching import matches
+from push.notify import notify
+
+log = logging.getLogger(__name__)
+
+SOURCE = "dealnews"
+MAX_AGE_HOURS = 6  # a first run, or a long outage, must not alert on old deals
+KEEP_DAYS = 30
+MAX_PUSHES = 5  # per user per run; deals over the cap stay unsent and go out on the next run
+
+
+def _rules_by_user(table: Any) -> dict[str, list[dict[str, Any]]]:
+    """Every usable enabled keyword rule, grouped by user, oldest first (so which rule names a deal never changes).
+
+    A scan: fine for a table this small. Rules that are malformed (hand-edited, say) are skipped.
+    """
+    found: dict[str, list[dict[str, Any]]] = {}
+    kwargs: dict[str, Any] = {"FilterExpression": Attr("SK").begins_with("RULE#") & Attr("enabled").eq(True)}
+    while True:
+        page = table.scan(**kwargs)
+        for item in page["Items"]:
+            if isinstance(item.get("keyword"), str) and item["keyword"].strip() and isinstance(item.get("sources"), list):
+                found.setdefault(item["PK"].removeprefix("USER#"), []).append(item)
+        if "LastEvaluatedKey" not in page:
+            break
+        kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+    for rules in found.values():
+        rules.sort(key=lambda r: (str(r.get("createdAt", "")), r["keyword"].casefold()))
+    return found
+
+
+def _claim(table: Any, user: str, deal: dict[str, Any], rule: dict[str, Any], now: datetime) -> tuple[dict[str, str], str]:
+    """Stores the deal for the user. Returns its key and "new" (just stored), "retry" (stored earlier but its alert never went
+    out) or "done" (stored and alerted).
+    """
+    key = {
+        "PK": f"USER#{user}",
+        "SK": f"DEAL#{deal['id']}",
+    }  # the feed's id alone: a deal whose publish time changes is still the same deal
+    item: dict[str, Any] = {
+        **key,
+        "title": deal["title"],
+        "url": deal["url"],
+        "source": SOURCE,
+        "keyword": rule["keyword"],
+        "publishedAt": deal["published"].isoformat(),
+        "pushed": False,  # becomes True once the alert has been sent
+        "ttl": int((now + timedelta(days=KEEP_DAYS)).timestamp()),
+    }
+    if deal["price"] is not None:
+        item["price"] = deal["price"]
+    if deal["retailer"]:
+        item["retailer"] = deal["retailer"]
+    try:
+        table.put_item(Item=item, ConditionExpression="attribute_not_exists(PK)")
+    except table.meta.client.exceptions.ConditionalCheckFailedException:
+        existing = table.get_item(Key=key).get("Item")
+        return key, "retry" if existing and existing.get("pushed") is False else "done"
+    return key, "new"
+
+
+def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
+    table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])  # pyright: ignore[reportAttributeAccessIssue]
+    now = datetime.now(UTC)
+    deals = dealnews.age_limit(now, dealnews.parse(dealnews.fetch()), MAX_AGE_HOURS)
+    saved = pushed = failed = 0
+    for user, rules in _rules_by_user(table).items():
+        attempts = 0
+        for deal in deals:
+            rule = next((r for r in rules if matches(r, deal, SOURCE)), None)
+            if rule is None:
+                continue
+            try:  # one deal or user failing must not stop the others
+                key, state = _claim(table, user, deal, rule, now)
+                saved += state == "new"
+                if state == "done" or attempts >= MAX_PUSHES:
+                    continue  # over the cap: stays unsent, goes out on a later run
+                attempts += 1  # counted even if it fails, so a broken push path can't bypass the cap
+                pushed += notify(table, user, f"New deal: {rule['keyword']}", deal["title"], "/#/deals", strict=True)
+                table.update_item(Key=key, UpdateExpression="SET pushed = :yes", ExpressionAttributeValues={":yes": True})
+            except Exception:
+                log.exception("deal alert failed")
+                failed += 1
+    if failed:
+        raise RuntimeError(f"{failed} deal alerts failed")  # shows as a Lambda error; the unsent ones are retried next run
+    return {"deals": len(deals), "saved": saved, "pushed": pushed}
