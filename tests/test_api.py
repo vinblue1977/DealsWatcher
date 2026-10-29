@@ -108,6 +108,10 @@ def test_create_rejects_non_object_body_and_too_many_watches(monkeypatch: pytest
         ("https://www.walmart.com/ip/Nintendo-Switch-2-Bundle/123456789", "Nintendo Switch 2 Bundle"),
         ("https://www.costco.com/lg-c5-oled-tv.product.100123456.html", "Lg c5 oled tv"),
         ("https://www.target.com/p/-/A-94909922", "Product"),
+        (
+            "https://www.tennis-warehouse.com/Babolat_Pure_Drive_Tennis_Racquet/descpageRCBAB-BPD.html",
+            "Babolat Pure Drive Tennis Racquet",
+        ),
     ],
 )
 def test_title_guess_skips_ids_and_file_endings(url: str, title: str) -> None:
@@ -196,6 +200,7 @@ def test_deals_feed_lists_the_users_deals_newest_first(table: Any) -> None:
         table.put_item(Item={"PK": f"USER#{USER}", "SK": sk, "title": sk})
     table.put_item(Item={"PK": f"USER#{OTHER}", "SK": "DEAL#2026-10-28T10#c", "title": "other"})
     assert [d["title"] for d in call("GET /me/deals")[1]["deals"]] == ["DEAL#2026-10-28T09#b", "DEAL#2026-10-28T01#a"]
+    assert call("GET /me/deals")[1]["deals"][0]["id"] == "DEAL#2026-10-28T09#b"  # the app keys its cards on this
 
 
 def test_push_device_lifecycle(monkeypatch: pytest.MonkeyPatch, table: Any) -> None:
@@ -265,7 +270,7 @@ def test_deals_hide_internal_keys_and_return_at_most_100(table: Any) -> None:
     for i in range(105):
         table.put_item(Item={"PK": f"USER#{USER}", "SK": f"DEAL#{i:04d}", "title": str(i)})
     deals = call("GET /me/deals")[1]["deals"]
-    assert len(deals) == 100 and deals[0] == {"title": "104"} and "PK" not in deals[0]
+    assert len(deals) == 100 and deals[0] == {"title": "104", "id": "DEAL#0104"} and "PK" not in deals[0]
 
 
 @pytest.mark.parametrize("zone", ["Europe", "../etc", "x" * 65, 5])  # a directory, a path, too long, not a string
@@ -332,3 +337,27 @@ def test_oversized_bodies_are_refused_before_any_route_runs() -> None:
     response = api.handler(event, None)
     assert response["statusCode"] == 413
     assert call("GET /me/rules") == (200, {"rules": []})
+
+
+def test_a_keyword_can_only_be_added_once_ignoring_case() -> None:
+    assert call("POST /me/rules", {"keyword": "OLED"})[0] == 201
+    assert call("POST /me/rules", {"keyword": " oled "}) == (400, {"error": "you already have this keyword"})
+    assert call("POST /me/rules", {"keyword": "AirPods"})[0] == 201
+
+
+def test_renaming_a_keyword_cannot_duplicate_another_but_can_change_its_own_case() -> None:
+    oled = call("POST /me/rules", {"keyword": "OLED"})[1]
+    pods = call("POST /me/rules", {"keyword": "AirPods"})[1]
+    assert call("PUT /me/rules/{id}", {"keyword": "oled"}, item_id=pods["id"]) == (
+        400,
+        {"error": "you already have this keyword"},
+    )
+    assert call("PUT /me/rules/{id}", {"keyword": "Oled"}, item_id=oled["id"])[0] == 200
+
+
+def test_the_size_cap_counts_bytes_and_survives_odd_unicode() -> None:
+    auth = {"authorizer": {"jwt": {"claims": {"sub": USER}}}}
+    four_byte = {"routeKey": "POST /me/rules", "body": "\U0001f600" * 3000, "requestContext": auth}  # 12 KB, only 3000 characters
+    assert api.handler(four_byte, None)["statusCode"] == 413
+    lone_surrogate = {"routeKey": "POST /me/rules", "body": "\ud800", "requestContext": auth}
+    assert api.handler(lone_surrogate, None)["statusCode"] == 400  # reaches the route instead of crashing

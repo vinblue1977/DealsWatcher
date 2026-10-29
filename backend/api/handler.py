@@ -22,7 +22,9 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         user = event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]  # the user comes from the token, never the request
     except KeyError:
         return json_response(401, {"error": "unauthorized"})
-    if len((event.get("body") or "").encode()) > MAX_BODY:
+    if (
+        len((event.get("body") or "").encode("utf-8", "surrogatepass")) > MAX_BODY
+    ):  # surrogatepass: odd Unicode must not crash the check
         return json_response(413, {"error": "request too large"})
     route = event.get("routeKey", "")
     item_id = (event.get("pathParameters") or {}).get("id", "")
@@ -36,7 +38,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             ScanIndexForward=False,
             Limit=100,
         )["Items"]
-        return json_response(200, {"deals": [view(d) for d in found]})
+        return json_response(200, {"deals": [{**view(d), "id": d["SK"]} for d in found]})  # id: a stable key for the app
     if route in ("GET /me/push", "PUT /me/push", "DELETE /me/push", "POST /me/push/test"):
         return _push(table, user, route, event)
     return json_response(404, {"error": "not found"})

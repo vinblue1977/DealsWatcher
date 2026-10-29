@@ -14,7 +14,12 @@ async function start(root: HTMLElement) {
     keepFresh();
     render(<App email={currentEmail()} onSignOut={logout} passkeyUrl={addPasskeyUrl()} />, root);
   } catch (e) {
-    render(<p class="muted">{(e as Error).message || 'Something went wrong.'}</p>, root);
+    render(
+      <main class="screen">
+        <p class="muted">{(e as Error).message || 'Something went wrong.'}</p>
+      </main>,
+      root,
+    );
   }
 }
 
