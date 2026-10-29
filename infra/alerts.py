@@ -27,7 +27,13 @@ class Alerts(Construct):
                 raise ValueError("The alert email is not a valid address")  # never echo it: CI logs are public
             # AWS emails a confirmation link to this address; alerts start once it is clicked. A fixed id, because
             # EmailSubscription builds its resource name from the address, and that name would show in public deploy logs.
-            sns.Subscription(self, "OwnerEmail", topic=topic, protocol=sns.SubscriptionProtocol.EMAIL, endpoint=email)  # pyright: ignore[reportArgumentType]
+            sns.Subscription(
+                self,
+                "OwnerEmail",
+                topic=topic,  # pyright: ignore[reportArgumentType]
+                protocol=sns.SubscriptionProtocol.EMAIL,
+                endpoint=email,
+            )
 
         # The checker runs every 30 minutes and does not retry on its own (see Feeds), so each failed run is one error. Two failed
         # runs in a row (about an hour) is worth an email; a single blip is simply tried again at the next run.

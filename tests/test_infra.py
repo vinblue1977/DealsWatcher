@@ -233,6 +233,13 @@ def test_the_alert_address_comes_from_context_or_the_environment(monkeypatch: py
     _template({"fromEnvironment": "yes"}).has_resource_properties("AWS::SNS::Subscription", {"Endpoint": "from-env@example.com"})
 
 
+def test_the_alert_address_is_not_part_of_any_resource_name() -> None:
+    """Resource names show in the public deploy logs; the address itself is only ever a property value."""
+    template = _template({"alertEmail": "owner@example.com"})
+    assert "owner" not in json.dumps(list(template.find_resources("AWS::SNS::Subscription")))
+    assert "owner" not in json.dumps(list(template.to_json()["Resources"]))
+
+
 def test_a_malformed_alert_address_is_refused_without_repeating_it() -> None:
     with pytest.raises(ValueError, match="not a valid address") as error:
         _template({"alertEmail": "not-an-email"})
