@@ -1,9 +1,12 @@
+import { Notifications } from './Notifications';
+
 export function Settings({ email, onSignOut, passkeyUrl }: { email: string; onSignOut: () => void; passkeyUrl: string }) {
   return (
     <main class="screen">
       <header class="top">
         <h1>Settings</h1>
       </header>
+      <Notifications />
       <section class="group">
         <div class="setting">
           <span>Signed in</span>

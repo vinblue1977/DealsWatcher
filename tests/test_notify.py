@@ -66,3 +66,25 @@ def test_a_missing_signing_key_is_an_error_not_a_silent_zero(monkeypatch: pytest
     table.put_item(Item={"PK": "USER#u", "SK": push.device_key("a"), "subscription": {"endpoint": "a"}})
     with pytest.raises(RuntimeError, match="parameter not found"):
         push.notify(table, "u", "Hi", "Body")
+
+
+def test_notify_can_target_one_device(table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    sent: list[str] = []
+    monkeypatch.setattr(push, "send", lambda subscription, *a, **k: sent.append(subscription["endpoint"]))
+    monkeypatch.setattr(push, "_private_key", lambda: "key")
+    for name in ("a", "b"):
+        endpoint = f"https://web.push.apple.com/{name}"
+        table.put_item(
+            Item={
+                "PK": "USER#u",
+                "SK": push.device_key(endpoint),
+                "subscription": {"endpoint": endpoint, "keys": {"p256dh": "x", "auth": "y"}},
+            }
+        )
+    assert push.notify(table, "u", "Hi", "Body", only=push.device_key("https://web.push.apple.com/b")) == 1
+    assert sent == ["https://web.push.apple.com/b"]
+
+
+def test_notify_only_reaches_nobody_when_that_device_is_gone(table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(push, "_private_key", lambda: "key")
+    assert push.notify(table, "u", "Hi", "Body", only=push.device_key("https://web.push.apple.com/none")) == 0

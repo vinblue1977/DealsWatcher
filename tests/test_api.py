@@ -10,6 +10,7 @@ from moto import mock_aws
 
 from api import handler as api
 from api import watches
+from push.notify import device_key
 
 USER = "user-1"
 OTHER = "user-2"
@@ -204,15 +205,17 @@ def test_deals_feed_lists_the_users_deals_newest_first(table: Any) -> None:
 
 
 def test_push_device_lifecycle(monkeypatch: pytest.MonkeyPatch, table: Any) -> None:
-    sent: list[tuple[str, str]] = []
-    monkeypatch.setattr(api, "notify", lambda t, user, title, body, url="/": sent.append((user, title)) or 1)
-    assert call("GET /me/push", query={"endpoint": ENDPOINT})[1] == {"devices": 0, "thisDevice": False}
+    sent: list[tuple[str, str, str | None]] = []
+    monkeypatch.setattr(api, "notify", lambda t, user, title, body, url="/", only=None: sent.append((user, title, only)) or 1)
+    assert call("POST /me/push/status", {"endpoint": ENDPOINT})[1] == {"devices": 0, "thisDevice": False}
     assert call("POST /me/push/test", {"endpoint": ENDPOINT})[0] == 404  # not turned on yet
     assert call("PUT /me/push", SUBSCRIPTION)[1] == {"devices": 1}
     assert table.get_item(Key={"PK": f"USER#{USER}", "SK": "PROFILE"})["Item"]["timeZone"] == "America/Chicago"
-    assert call("GET /me/push", query={"endpoint": ENDPOINT})[1] == {"devices": 1, "thisDevice": True}
-    assert call("POST /me/push/test", {"endpoint": ENDPOINT})[1] == {"sent": 1} and sent == [(USER, "DealsWatcher")]
-    assert call("GET /me/push", user=OTHER, query={"endpoint": ENDPOINT})[1] == {"devices": 0, "thisDevice": False}
+    assert call("POST /me/push/status", {"endpoint": ENDPOINT})[1] == {"devices": 1, "thisDevice": True}
+    assert call("POST /me/push/test", {"endpoint": ENDPOINT})[1] == {"sent": 1} and sent == [
+        (USER, "DealsWatcher", device_key(ENDPOINT))
+    ]
+    assert call("POST /me/push/status", {"endpoint": ENDPOINT}, user=OTHER)[1] == {"devices": 0, "thisDevice": False}
     assert call("DELETE /me/push", {"endpoint": ENDPOINT})[1] == {"devices": 0}
 
 
@@ -361,3 +364,9 @@ def test_the_size_cap_counts_bytes_and_survives_odd_unicode() -> None:
     assert api.handler(four_byte, None)["statusCode"] == 413
     lone_surrogate = {"routeKey": "POST /me/rules", "body": "\ud800", "requestContext": auth}
     assert api.handler(lone_surrogate, None)["statusCode"] == 400  # reaches the route instead of crashing
+
+
+def test_push_status_needs_a_known_push_service_endpoint_and_stays_out_of_urls() -> None:
+    assert call("POST /me/push/status", {"endpoint": "https://evil.example/x"})[0] == 400
+    assert call("POST /me/push/status", [1])[0] == 400
+    assert call("GET /me/push", query={"endpoint": ENDPOINT})[0] == 404  # the old URL-based route is gone
