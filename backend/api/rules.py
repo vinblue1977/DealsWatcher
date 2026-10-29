@@ -40,6 +40,10 @@ def _fields(data: dict[str, Any], partial: bool) -> tuple[dict[str, Any], str | 
     return out, None
 
 
+def _has_keyword(rules: list[dict[str, Any]], keyword: str, except_id: str = "") -> bool:
+    return any(r["id"] != except_id and r["keyword"].casefold() == keyword.casefold() for r in rules)
+
+
 def route(table: Any, user: str, route: str, rule_id: str, body: str | None) -> dict[str, Any]:
     pk = f"USER#{user}"
     if route == "GET /me/rules":
@@ -52,7 +56,10 @@ def route(table: Any, user: str, route: str, rule_id: str, body: str | None) -> 
         fields, error = _fields(data, partial=False)
         if error:
             return json_response(400, {"error": error})
-        if len(query_items(table, user, "RULE#")) >= MAX_RULES:  # a soft cap: two simultaneous adds could slip past it
+        existing = query_items(table, user, "RULE#")
+        if _has_keyword(existing, fields["keyword"]):  # a soft check, like the cap: two simultaneous adds could slip past it
+            return json_response(400, {"error": "you already have this keyword"})
+        if len(existing) >= MAX_RULES:  # a soft cap: two simultaneous adds could slip past it
             return json_response(400, {"error": f"up to {MAX_RULES} keywords"})
         new_id = uuid.uuid4().hex[:12]
         item = {
@@ -81,6 +88,8 @@ def route(table: Any, user: str, route: str, rule_id: str, body: str | None) -> 
         fields, error = _fields(data, partial=True)
         if error or not fields:
             return json_response(400, {"error": error or "nothing to change"})
+        if "keyword" in fields and _has_keyword(query_items(table, user, "RULE#"), fields["keyword"], except_id=rule_id):
+            return json_response(400, {"error": "you already have this keyword"})
         updated = update_item(table, key, fields)
         return json_response(200, view(updated)) if updated else json_response(404, {"error": "no such keyword"})
     return json_response(404, {"error": "not found"})

@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from './api';
-import { initials, money, summary, targetMoney, watchState } from './format';
+import { initials, money, summary, targetMoney, visibleWatches, watchState, type WatchFilter } from './format';
 import type { Watch } from './types';
-
-type Filter = 'all' | 'target' | 'attention';
 
 function Card({ watch }: { watch: Watch }) {
   const state = watchState(watch);
@@ -29,7 +27,7 @@ function Card({ watch }: { watch: Watch }) {
 export function Watching() {
   const [watches, setWatches] = useState<Watch[] | null>(null);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<WatchFilter>('all');
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -43,11 +41,8 @@ export function Watching() {
     };
   }, [attempt]);
 
-  const shown = (watches ?? []).filter((w) => {
-    const state = watchState(w);
-    return filter === 'all' || (filter === 'target' ? state.atTarget : state.blocked);
-  });
-  const chips: [Filter, string][] = [
+  const shown = visibleWatches(watches ?? [], filter);
+  const chips: [WatchFilter, string][] = [
     ['all', `All ${watches?.length ?? 0}`],
     ['target', 'At target'],
     ['attention', 'Needs attention'],

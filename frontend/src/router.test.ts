@@ -6,6 +6,8 @@ describe('parseRoute', () => {
   it('maps hashes to screens and defaults to Watching', () => {
     expect(parseRoute('#/add')).toEqual({ route: 'add', id: '' });
     expect(parseRoute('#/settings')).toEqual({ route: 'settings', id: '' });
+    expect(parseRoute('#/deals')).toEqual({ route: 'deals', id: '' });
+    expect(parseRoute('#/keywords')).toEqual({ route: 'keywords', id: '' });
     expect(parseRoute('')).toEqual({ route: 'watching', id: '' });
     expect(parseRoute('#/')).toEqual({ route: 'watching', id: '' });
     expect(parseRoute('#/nope')).toEqual({ route: 'watching', id: '' });

@@ -32,7 +32,10 @@ def retailer_for(url: str) -> str | None:
 
 
 # Parts of a store link that are not the product's name: file endings, route words and product ids ("A-94909922", "6578912.p").
-_ENDING = re.compile(r"(\.product\.\d+)?\.(html?|aspx?|p)$", re.IGNORECASE)
+# A plain ".html" segment is an opaque page code (Tennis Warehouse), but Costco's "<name>.product.<id>.html" carries the name.
+_COSTCO = re.compile(r"\.product\.\d+\.html$", re.IGNORECASE)
+_ENDING = re.compile(r"\.p$", re.IGNORECASE)
+_PAGE_FILE = re.compile(r"\.(html?|aspx?)$", re.IGNORECASE)
 _ROUTE_WORDS = {"p", "ip", "dp", "site", "product", "products", "pdp", "-"}
 _ID_LIKE = re.compile(r"^[a-z]?[-_]?[\d.]+[a-z]?$", re.IGNORECASE)
 
@@ -41,6 +44,9 @@ def _title_from(url: str) -> str:
     """A readable name from the link's last name-like path segment, until the checker reads the real product title."""
     names = []
     for segment in unquote(urlsplit(url).path).split("/"):
+        segment = _COSTCO.sub("", segment)
+        if _PAGE_FILE.search(segment):
+            continue
         segment = _ENDING.sub("", segment)
         if segment and segment.lower() not in _ROUTE_WORDS and not _ID_LIKE.fullmatch(segment):
             names.append(segment)
