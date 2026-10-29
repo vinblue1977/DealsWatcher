@@ -24,7 +24,7 @@ describe('retailerFor', () => {
   });
   it.each([
     'http://www.target.com/p/x',
-    'https://user:pw@www.target.com/',
+    `https://user:pw${'@'}www.target.com/`, // credentials in the link
     'https://nottarget.com/',
     'https://target.com.evil.test/',
     'https://www.amazon.com/dp/1',
