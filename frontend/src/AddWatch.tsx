@@ -2,10 +2,12 @@ import { useState } from 'preact/hooks';
 
 import { api } from './api';
 import { parsePrice, retailerFor, STORE_NAMES } from './format';
+import { Switch } from './Switch';
 import { go } from './router';
 
 export function AddWatch() {
   const [url, setUrl] = useState('');
+  const [name, setName] = useState('');
   const [target, setTarget] = useState('');
   const [alertOnDrop, setAlertOnDrop] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -29,8 +31,8 @@ export function AddWatch() {
     setBusy(true);
     setError('');
     try {
-      await api.addWatch({ url: url.trim(), targetPrice: price, alertOnDrop });
-      go('watching');
+      await api.addWatch({ url: url.trim(), targetPrice: price, alertOnDrop, ...(name.trim() ? { title: name.trim() } : {}) });
+      go('#/');
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);
@@ -59,6 +61,12 @@ export function AddWatch() {
       </div>
 
       <div class="field">
+        <label for="name">Name (optional)</label>
+        <input id="name" class="text" autoComplete="off" maxLength={120} placeholder="e.g. AirPods Pro 3" value={name} onInput={(e) => setName(e.currentTarget.value)} />
+        <div class="muted small">Until prices are checked automatically, this is what the list shows.</div>
+      </div>
+
+      <div class="field">
         <label for="target">Alert me at or below</label>
         <div class="money">
           <span aria-hidden="true">$</span>
@@ -67,12 +75,7 @@ export function AddWatch() {
       </div>
 
       <div class="group">
-        <div class="setting">
-          <span id="drop-label">Also alert on drops of 10% or more</span>
-          <button type="button" role="switch" aria-checked={alertOnDrop} aria-labelledby="drop-label" class={alertOnDrop ? 'switch on' : 'switch'} onClick={() => setAlertOnDrop(!alertOnDrop)}>
-            <span class="knob" />
-          </button>
-        </div>
+        <Switch on={alertOnDrop} label="Also alert on drops of 10% or more" onChange={setAlertOnDrop} />
       </div>
 
       {error && (

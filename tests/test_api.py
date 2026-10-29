@@ -100,6 +100,20 @@ def test_create_rejects_non_object_body_and_too_many_watches(monkeypatch: pytest
     assert call("POST /me/watches", {"url": OTHER_URL, "targetPrice": 5}) == (400, {"error": "up to 1 watches"})
 
 
+@pytest.mark.parametrize(
+    ("url", "title"),
+    [
+        ("https://www.target.com/p/apple-airpods-pro-3/-/A-94909922", "Apple airpods pro 3"),
+        ("https://www.bestbuy.com/site/lg-c5-55-oled-tv/6578912.p?skuId=6578912", "Lg c5 55 oled tv"),
+        ("https://www.walmart.com/ip/Nintendo-Switch-2-Bundle/123456789", "Nintendo Switch 2 Bundle"),
+        ("https://www.costco.com/lg-c5-oled-tv.product.100123456.html", "Lg c5 oled tv"),
+        ("https://www.target.com/p/-/A-94909922", "Product"),
+    ],
+)
+def test_title_guess_skips_ids_and_file_endings(url: str, title: str) -> None:
+    assert watches._title_from(url) == title  # noqa: SLF001
+
+
 def test_title_falls_back_when_the_link_has_no_words() -> None:
     assert add_watch(url="https://www.target.com/")["title"] == "Product"
     assert watches.retailer_for("https://" + "a" * 1001 + ".bestbuy.com") is None
