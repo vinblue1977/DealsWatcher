@@ -2,7 +2,7 @@ import { render } from 'preact';
 
 import { App } from './App';
 import { initApi } from './api';
-import { currentEmail, initAuth, keepFresh, logout } from './auth';
+import { addPasskeyUrl, currentEmail, initAuth, keepFresh, logout } from './auth';
 import { loadConfig } from './config';
 import './styles.css';
 
@@ -12,7 +12,7 @@ async function start(root: HTMLElement) {
     initApi(config);
     if (!(await initAuth(config))) return; // redirected to the sign-in page
     keepFresh();
-    render(<App email={currentEmail()} onSignOut={logout} />, root);
+    render(<App email={currentEmail()} onSignOut={logout} passkeyUrl={addPasskeyUrl()} />, root);
   } catch (e) {
     render(<p class="muted">{(e as Error).message || 'Something went wrong.'}</p>, root);
   }
