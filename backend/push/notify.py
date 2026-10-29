@@ -35,10 +35,14 @@ def devices(table: Any, user: str) -> list[dict[str, Any]]:
         kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
 
-def notify(table: Any, user: str, title: str, body: str, url: str = "/") -> int:
-    """Returns how many devices it reached; expired subscriptions are removed."""
+def notify(table: Any, user: str, title: str, body: str, url: str = "/", only: str | None = None) -> int:
+    """Returns how many devices it reached; expired subscriptions are removed. `only`: one device's sort key (PUSH#...)."""
     sent = 0
-    mine = devices(table, user)
+    if only is None:
+        mine = devices(table, user)
+    else:  # one exact row, not a query over all devices
+        row = table.get_item(Key={"PK": f"USER#{user}", "SK": only}).get("Item")
+        mine = [row] if row else []
     if not mine:
         return 0
     key = _private_key()  # outside the loop: a missing or unreadable signing key must fail loudly, not look like "sent 0"

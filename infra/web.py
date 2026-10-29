@@ -219,7 +219,7 @@ class Web(Construct):
             (apigw.HttpMethod.PUT, "/me/rules/{id}"),
             (apigw.HttpMethod.DELETE, "/me/rules/{id}"),
             (apigw.HttpMethod.GET, "/me/deals"),
-            (apigw.HttpMethod.GET, "/me/push"),
+            (apigw.HttpMethod.POST, "/me/push/status"),
             (apigw.HttpMethod.PUT, "/me/push"),
             (apigw.HttpMethod.DELETE, "/me/push"),
             (apigw.HttpMethod.POST, "/me/push/test"),

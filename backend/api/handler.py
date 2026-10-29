@@ -39,7 +39,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             Limit=100,
         )["Items"]
         return json_response(200, {"deals": [{**view(d), "id": d["SK"]} for d in found]})  # id: a stable key for the app
-    if route in ("GET /me/push", "PUT /me/push", "DELETE /me/push", "POST /me/push/test"):
+    if route in ("POST /me/push/status", "PUT /me/push", "DELETE /me/push", "POST /me/push/test"):
         return _push(table, user, route, event)
     return json_response(404, {"error": "not found"})
 
@@ -55,11 +55,10 @@ def _valid_zone(zone: Any) -> str | None:
 
 
 def _push(table: Any, user: str, route: str, event: dict[str, Any]) -> dict[str, Any]:
-    """Notifications on this device: status (GET), turn on (PUT), turn off (DELETE), test (POST)."""
-    if route == "GET /me/push":
-        endpoint = (event.get("queryStringParameters") or {}).get("endpoint", "")
-        mine = devices(table, user)
-        return json_response(200, {"devices": len(mine), "thisDevice": any(d["SK"] == device_key(endpoint) for d in mine)})
+    """Notifications on this device: status (POST), turn on (PUT), turn off (DELETE), test (POST).
+
+    The endpoint is a secret (anyone who has it can push to the device), so it only travels in request bodies, never in URLs.
+    """
     data = parse_object(event.get("body"))
     if data is None:
         return json_response(400, {"error": "body must be a JSON object"})
@@ -67,13 +66,18 @@ def _push(table: Any, user: str, route: str, event: dict[str, Any]) -> dict[str,
     if not isinstance(endpoint, str) or len(endpoint) > 1000 or not allowed_endpoint(endpoint):
         return json_response(400, {"error": "not a known push service"})
     key = {"PK": f"USER#{user}", "SK": device_key(endpoint)}
+    if route == "POST /me/push/status":
+        mine = devices(table, user)
+        return json_response(200, {"devices": len(mine), "thisDevice": any(d["SK"] == key["SK"] for d in mine)})
     if route == "DELETE /me/push":
         table.delete_item(Key=key)
         return json_response(200, {"devices": len(devices(table, user))})
     if route == "POST /me/push/test":
         if "Item" not in table.get_item(Key=key):
             return json_response(404, {"error": "notifications are not on for this device"})
-        return json_response(200, {"sent": notify(table, user, "DealsWatcher", "Notifications work on this device.", "/")})
+        return json_response(
+            200, {"sent": notify(table, user, "DealsWatcher", "Notifications work on this device.", "/", only=key["SK"])}
+        )  # just this device
     keys = data.get("keys")
     if not (isinstance(keys, dict) and all(isinstance(keys.get(k), str) and 0 < len(keys[k]) <= 200 for k in ("p256dh", "auth"))):
         return json_response(400, {"error": "subscription keys missing"})

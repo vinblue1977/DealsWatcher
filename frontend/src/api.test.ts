@@ -50,7 +50,10 @@ describe('api client', () => {
     await expect(api.rules()).resolves.toEqual([1]);
     await expect(api.deals()).resolves.toEqual([2]);
     await expect(api.pushStatus('https://x/a b')).resolves.toMatchObject({ thisDevice: true });
-    expect(lastCall()[0]).toBe('https://api.test/me/push?endpoint=https%3A%2F%2Fx%2Fa%20b');
+    const [url, init] = lastCall();
+    expect(url).toBe('https://api.test/me/push/status'); // the endpoint is a secret: in the body, never in the URL
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ endpoint: 'https://x/a b' });
   });
 
   it('merges the subscription with the time zone when turning notifications on', async () => {
