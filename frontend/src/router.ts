@@ -1,22 +1,32 @@
 import { useEffect, useState } from 'preact/hooks';
 
-export type Route = 'watching' | 'add' | 'settings';
+export type Route = 'watching' | 'add' | 'settings' | 'watch';
+export interface Location {
+  route: Route;
+  /** The watch id on the 'watch' screen. */
+  id: string;
+}
 
-const ROUTES: Record<string, Route> = { '#/add': 'add', '#/settings': 'settings' };
+const SCREENS: Record<string, Route> = { '#/add': 'add', '#/settings': 'settings' };
+const WATCH = /^#\/watch\/([0-9a-f]{12})$/;
 
 /** The screen for a URL hash; anything unknown is the Watching list. */
-export const parseRoute = (hash: string): Route => ROUTES[hash] ?? 'watching';
+export function parseRoute(hash: string): Location {
+  const watch = WATCH.exec(hash);
+  if (watch?.[1]) return { route: 'watch', id: watch[1] };
+  return { route: SCREENS[hash] ?? 'watching', id: '' };
+}
 
-export const go = (route: Route): void => {
-  location.hash = route === 'watching' ? '#/' : `#/${route}`;
+export const go = (hash: string): void => {
+  location.hash = hash;
 };
 
-export function useRoute(): Route {
-  const [route, setRoute] = useState(() => parseRoute(location.hash));
+export function useRoute(): Location {
+  const [where, setWhere] = useState(() => parseRoute(location.hash));
   useEffect(() => {
-    const onChange = () => setRoute(parseRoute(location.hash));
+    const onChange = () => setWhere(parseRoute(location.hash));
     addEventListener('hashchange', onChange);
     return () => removeEventListener('hashchange', onChange);
   }, []);
-  return route;
+  return where;
 }
