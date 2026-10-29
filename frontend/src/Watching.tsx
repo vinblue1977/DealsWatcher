@@ -10,7 +10,8 @@ function Card({ watch }: { watch: Watch }) {
   const state = watchState(watch);
   const price = watch.lastPrice;
   return (
-    <li class="card">
+    <li>
+      <a class="card" href={`#/watch/${watch.id}`}>
       <div class="badge">{initials(watch.retailer)}</div>
       <div class="grow">
         <div class="title">{watch.title}</div>
@@ -20,6 +21,7 @@ function Card({ watch }: { watch: Watch }) {
         <div class={price === undefined ? 'amount faint' : 'amount'}>{price === undefined ? '—' : money(price)}</div>
         <div class="muted small">Target {targetMoney(watch.targetPrice)}</div>
       </div>
+      </a>
     </li>
   );
 }

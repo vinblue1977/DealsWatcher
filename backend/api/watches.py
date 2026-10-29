@@ -31,14 +31,20 @@ def retailer_for(url: str) -> str | None:
     return next((name for domain, name in RETAILERS.items() if host == domain or host.endswith("." + domain)), None)
 
 
+# Parts of a store link that are not the product's name: file endings, route words and product ids ("A-94909922", "6578912.p").
+_ENDING = re.compile(r"(\.product\.\d+)?\.(html?|aspx?|p)$", re.IGNORECASE)
+_ROUTE_WORDS = {"p", "ip", "dp", "site", "product", "products", "pdp", "-"}
+_ID_LIKE = re.compile(r"^[a-z]?[-_]?[\d.]+[a-z]?$", re.IGNORECASE)
+
+
 def _title_from(url: str) -> str:
-    """A readable name from the link's last path segment, until the checker reads the real product title."""
-    segments = [
-        s
-        for s in unquote(urlsplit(url).path).split("/")
-        if s and not re.fullmatch(r"[\d.]+[a-z]?", s) and not s.endswith((".html", ".htm"))
-    ]
-    words = re.sub(r"[-_+]+", " ", segments[-1] if segments else "").strip()
+    """A readable name from the link's last name-like path segment, until the checker reads the real product title."""
+    names = []
+    for segment in unquote(urlsplit(url).path).split("/"):
+        segment = _ENDING.sub("", segment)
+        if segment and segment.lower() not in _ROUTE_WORDS and not _ID_LIKE.fullmatch(segment):
+            names.append(segment)
+    words = re.sub(r"[-_+]+", " ", names[-1] if names else "").strip()
     return (words[:1].upper() + words[1:])[:120] if words else "Product"
 
 
