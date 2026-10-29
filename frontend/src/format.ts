@@ -1,4 +1,4 @@
-import type { Watch } from './types';
+import type { Rule, Source, Watch } from './types';
 
 export type Tone = 'good' | 'warn' | 'muted';
 
@@ -13,15 +13,20 @@ const RETAILERS: Record<string, string> = {
 
 export const STORE_NAMES = Object.values(RETAILERS);
 
-/** The store a product link belongs to, or null when it isn't a link we can watch. */
-export function retailerFor(link: string): string | null {
-  let url: URL;
+/** A plain https link (no embedded credentials) as a URL, else null. */
+export function httpsUrl(link: string): URL | null {
   try {
-    url = new URL(link.trim());
+    const url = new URL(link.trim());
+    return url.protocol === 'https:' && !url.username && !url.password ? url : null;
   } catch {
     return null;
   }
-  if (url.protocol !== 'https:' || url.username || url.password) return null;
+}
+
+/** The store a product link belongs to, or null when it isn't a link we can watch. */
+export function retailerFor(link: string): string | null {
+  const url = httpsUrl(link);
+  if (!url) return null;
   const host = url.hostname.toLowerCase();
   const match = Object.entries(RETAILERS).find(([domain]) => host === domain || host.endsWith(`.${domain}`));
   return match ? match[1] : null;
@@ -38,11 +43,12 @@ export function targetMoney(amount: number): string {
   return Number.isInteger(amount) ? dollars.format(amount).replace(/\.00$/, '') : dollars.format(amount);
 }
 
-/** A dollar amount typed by the user ("199", "$1,099.50") as a number, or null if it isn't a positive amount under $100,000. */
+/** A dollar amount typed by the user ("199", "$1,099.50") as a number, or null if it isn't a positive amount under $100,000.
+ * Commas count only as thousands separators, so "1,99" is refused instead of read as 199. */
 export function parsePrice(text: string): number | null {
-  const cleaned = text.replace(/[$,\s]/g, '');
-  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
-  const amount = Number(cleaned);
+  const typed = text.trim().replace(/^\$\s*/, '');
+  if (!/^(\d{1,3}(,\d{3})+|\d+)(\.\d{1,2})?$/.test(typed)) return null;
+  const amount = Number(typed.replace(/,/g, ''));
   return amount > 0 && amount < 100000 ? amount : null;
 }
 
@@ -54,6 +60,7 @@ export function initials(store: string): string {
 }
 
 export function ago(iso: string, now = Date.now()): string {
+  if (Number.isNaN(Date.parse(iso))) return 'a while ago';
   const minutes = Math.max(0, Math.round((now - Date.parse(iso)) / 60000));
   if (minutes < 1) return 'just now';
   if (minutes < 60) return `${minutes} min ago`;
@@ -76,12 +83,39 @@ export function watchState(w: Watch): WatchState {
   if (w.status === 'blocked') return { label: "Can't read price", tone: 'warn', atTarget: false, blocked: true };
   if (w.lastPrice === undefined) return { label: 'Waiting for first check', tone: 'muted', atTarget: false, blocked: false };
   if (w.lastPrice <= w.targetPrice) return { label: 'At target', tone: 'good', atTarget: true, blocked: false };
-  return { label: `${targetMoney(w.lastPrice - w.targetPrice)} above target`, tone: 'muted', atTarget: false, blocked: false };
+  return { label: `${targetMoney(Math.round((w.lastPrice - w.targetPrice) * 100) / 100)} above target`, tone: 'muted', atTarget: false, blocked: false };
 }
 
 /** Subtitle under "Watching": the count and when the newest check happened. */
 export function summary(watches: Watch[], now = Date.now()): string {
   const count = `${watches.length} ${watches.length === 1 ? 'item' : 'items'}`;
-  const checked = watches.flatMap((w) => (w.lastChecked ? [w.lastChecked] : [])).sort().at(-1);
+  const times = watches.flatMap((w) => (w.lastChecked && !Number.isNaN(Date.parse(w.lastChecked)) ? [w.lastChecked] : []));
+  const checked = times.sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1);
   return checked ? `${count} · checked ${ago(checked, now)}` : count;
+}
+
+const SOURCE_NAMES: Record<Source, string> = { dealnews: 'Dealnews', reddit: 'Reddit', slickdeals: 'Slickdeals' };
+export const SOURCES = Object.keys(SOURCE_NAMES) as Source[];
+
+export const sourceName = (source: Source | undefined): string => (source ? (SOURCE_NAMES[source] ?? source) : '');
+
+/** A link from an outside feed, only if it is a plain https link; anything else (javascript:, data:, http:) is dropped. */
+export function safeLink(link: string | undefined): string | null {
+  return link ? (httpsUrl(link)?.href ?? null) : null;
+}
+
+/** "Under $1,200 · Slickdeals, Reddit" (or "Any price · all feeds"), with "Paused" at the end when it is off. */
+export function ruleLine(rule: Rule): string {
+  const price = rule.maxPrice === null ? 'Any price' : `Under ${targetMoney(rule.maxPrice)}`;
+  const feeds = rule.sources.length === SOURCES.length ? 'all feeds' : rule.sources.map(sourceName).join(', ');
+  return [price, feeds, ...(rule.enabled ? [] : ['Paused'])].join(' · ');
+}
+
+export type WatchFilter = 'all' | 'target' | 'attention';
+
+export function visibleWatches(watches: Watch[], filter: WatchFilter): Watch[] {
+  return watches.filter((w) => {
+    const state = watchState(w);
+    return filter === 'all' || (filter === 'target' ? state.atTarget : state.blocked);
+  });
 }

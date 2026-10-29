@@ -45,10 +45,10 @@ export interface RuleInput {
 export type RulePatch = Partial<RuleInput>;
 
 export interface Deal {
-  SK: string; // DEAL#<time>#<id>, newest first
+  id: string; // stable key, newest first
   title?: string;
   url?: string;
-  price?: number;
+  price?: number | null;
   source?: Source;
   keyword?: string;
   seenAt?: string;

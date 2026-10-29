@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { ago, initials, money, parsePrice, retailerFor, summary, targetMoney, watchState } from './format';
-import type { Watch } from './types';
+import { ago, initials, money, parsePrice, retailerFor, ruleLine, safeLink, summary, targetMoney, visibleWatches, watchState } from './format';
+import type { Rule, Watch } from './types';
 
 const watch = (over: Partial<Watch> = {}): Watch => ({
   id: 'abc',
@@ -48,7 +48,7 @@ describe('prices', () => {
   ])('parses %s', (text, value) => {
     expect(parsePrice(text)).toBe(value);
   });
-  it.each(['', '0', '-5', '1e3', '12.345', '100000', 'abc', '1.'])('rejects %j', (text) => {
+  it.each(['', '0', '-5', '1e3', '12.345', '100000', 'abc', '1.', '1,99', '1 99', '19,9', '1,0999'])('rejects %j', (text) => {
     expect(parsePrice(text)).toBeNull();
   });
 });
@@ -68,6 +68,7 @@ describe('ago', () => {
     expect(ago('2026-10-28T11:54:00Z', now)).toBe('6 min ago');
     expect(ago('2026-10-28T09:00:00Z', now)).toBe('3 h ago');
     expect(ago('2026-10-20T12:00:00Z', now)).toBe('8 days ago');
+    expect(ago('not a time', now)).toBe('a while ago');
   });
 });
 
@@ -78,6 +79,7 @@ describe('watchState', () => {
     expect(watchState(watch({ status: 'pending' }))).toMatchObject({ label: 'Waiting for first check' });
     expect(watchState(watch({ lastPrice: 199 }))).toMatchObject({ label: 'At target', atTarget: true, tone: 'good' });
     expect(watchState(watch({ lastPrice: 229 }))).toMatchObject({ label: '$30 above target', atTarget: false });
+    expect(watchState(watch({ lastPrice: 229.99, targetPrice: 199.99 })).label).toBe('$30 above target'); // no float noise
   });
 });
 
@@ -88,5 +90,34 @@ describe('summary', () => {
     expect(summary([watch()], now)).toBe('1 item');
     const two = [watch({ lastChecked: '2026-10-28T11:00:00Z' }), watch({ lastChecked: '2026-10-28T11:54:00Z' })];
     expect(summary(two, now)).toBe('2 items · checked 6 min ago');
+    expect(summary([watch({ lastChecked: 'garbage' })], now)).toBe('1 item');
+  });
+});
+
+describe('deal feed links', () => {
+  it('keeps plain https links only', () => {
+    // the script link is built in pieces so the linter's no-script-url rule doesn't flag the test data
+    expect(safeLink('https://slickdeals.net/f/1')).toBe('https://slickdeals.net/f/1');
+    for (const bad of [`${'java'}script:alert(1)`, 'data:text/html,x', 'http://slickdeals.net/', `https://u:p${'@'}slickdeals.net/`, 'not a url', '', undefined]) {
+      expect(safeLink(bad)).toBeNull();
+    }
+  });
+});
+
+describe('ruleLine', () => {
+  const rule = (over: Partial<Rule> = {}): Rule => ({ id: 'a', keyword: 'OLED', maxPrice: 1200, sources: ['slickdeals', 'reddit'], enabled: true, createdAt: '', ...over });
+  it('describes price, feeds and paused state', () => {
+    expect(ruleLine(rule())).toBe('Under $1,200 · Slickdeals, Reddit');
+    expect(ruleLine(rule({ maxPrice: null, sources: ['dealnews', 'reddit', 'slickdeals'] }))).toBe('Any price · all feeds');
+    expect(ruleLine(rule({ enabled: false }))).toBe('Under $1,200 · Slickdeals, Reddit · Paused');
+  });
+});
+
+describe('visibleWatches', () => {
+  const list = [watch({ id: 'a', lastPrice: 150 }), watch({ id: 'b', lastPrice: 300 }), watch({ id: 'c', status: 'blocked' })];
+  it('filters by state', () => {
+    expect(visibleWatches(list, 'all')).toHaveLength(3);
+    expect(visibleWatches(list, 'target').map((w) => w.id)).toEqual(['a']);
+    expect(visibleWatches(list, 'attention').map((w) => w.id)).toEqual(['c']);
   });
 });

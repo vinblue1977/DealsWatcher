@@ -13,6 +13,7 @@ export function Detail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [target, setTarget] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -31,7 +32,7 @@ export function Detail({ id }: { id: string }) {
     return () => {
       live = false;
     };
-  }, [id]);
+  }, [id, attempt]);
 
   async function change(patch: WatchPatch) {
     setBusy(true);
@@ -39,7 +40,7 @@ export function Detail({ id }: { id: string }) {
     try {
       const updated = await api.editWatch(id, patch);
       setWatch(updated);
-      setTarget(String(updated.targetPrice));
+      if (patch.targetPrice !== undefined) setTarget(String(updated.targetPrice)); // other changes keep a half-typed target
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -83,9 +84,12 @@ export function Detail({ id }: { id: string }) {
       <main class="screen">
         <header class="top">{back}</header>
         {error ? (
-          <p class="error" role="alert">
-            {error}
-          </p>
+          <div class="notice" role="alert">
+            <span>{error}</span>
+            <button class="button" type="button" onClick={() => { setError(''); setAttempt(attempt + 1); }}>
+              Retry
+            </button>
+          </div>
         ) : (
           <p class="muted">Loading…</p>
         )}

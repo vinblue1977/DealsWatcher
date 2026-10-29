@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'preact/hooks';
 
-export type Route = 'watching' | 'add' | 'settings' | 'watch';
+export type Route = 'watching' | 'add' | 'settings' | 'watch' | 'deals' | 'keywords';
 export interface Location {
   route: Route;
   /** The watch id on the 'watch' screen. */
   id: string;
 }
 
-const SCREENS: Record<string, Route> = { '#/add': 'add', '#/settings': 'settings' };
+const SCREENS: Record<string, Route> = { '#/add': 'add', '#/settings': 'settings', '#/deals': 'deals', '#/keywords': 'keywords' };
 const WATCH = /^#\/watch\/([0-9a-f]{12})$/;
 
 /** The screen for a URL hash; anything unknown is the Watching list. */
