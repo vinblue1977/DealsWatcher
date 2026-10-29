@@ -23,7 +23,7 @@ class Feeds(Construct):
         push_env: dict[str, str],
     ) -> None:
         super().__init__(scope, construct_id)
-        fn = lambda_.Function(
+        self.checker = fn = lambda_.Function(
             self,
             "Checker",
             runtime=lambda_.Runtime.PYTHON_3_14,
@@ -32,6 +32,7 @@ class Feeds(Construct):
             code=lambda_.Code.from_asset("backend", exclude=["**/__pycache__"]),
             memory_size=256,
             timeout=Duration.seconds(60),
+            retry_attempts=0,  # the next scheduled run is 30 minutes away: no automatic retries, so one failed run is one error
             environment={"TABLE_NAME": table.table_name, **push_env},
             layers=[layer],
             log_group=logs.LogGroup(self, "Logs", retention=logs.RetentionDays.TWO_WEEKS),

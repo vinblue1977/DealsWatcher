@@ -1,5 +1,6 @@
 """The DealsWatcher stack: data table, sign-in, API, hosting and the GitHub deploy role."""
 
+import os
 import re
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from aws_cdk import aws_lambda as lambda_
 from cdk_nag import NagPackSuppression, NagSuppressions, RegexAppliesTo
 from constructs import Construct
 
+from infra.alerts import Alerts
 from infra.feeds import Feeds
 from infra.push import VAPID_PARAM
 from infra.web import Web
@@ -59,7 +61,10 @@ class DealsWatcherStack(Stack):
             layer=layer,
             push_env=push_env,
         )
-        Feeds(self, "Feeds", table=self.table, layer=layer, push_env=push_env)
+        feeds = Feeds(self, "Feeds", table=self.table, layer=layer, push_env=push_env)
+        # Never in a file: the deploy passes it from a GitHub secret (ALERT_EMAIL), or a developer from `-c alertEmail=...`.
+        email = self.node.try_get_context("alertEmail") or os.environ.get("ALERT_EMAIL") or None
+        Alerts(self, "Alerts", checker=feeds.checker, email=email)  # pyright: ignore[reportArgumentType]
 
         github_repo: str = self.node.try_get_context("githubRepo") or ""
         if github_repo:

@@ -280,7 +280,12 @@ jobs:
           aws-region: ${{ vars.AWS_REGION || 'us-east-2' }}
           mask-aws-account-id: true  # public repo: logs are public
       - name: Deploy
+        env:
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}  # where alarm emails go; a secret, never in the repo (masked in logs)
         run: |
+          if [ -z "$ALERT_EMAIL" ]; then
+            echo "::warning::ALERT_EMAIL is not set in the production environment: this deploy leaves the alarm without an email subscription (and removes an existing one)."
+          fi
           . .venv/bin/activate
           npx --no-install cdk deploy --require-approval never --outputs-file cdk-outputs.json
       - name: Smoke test
