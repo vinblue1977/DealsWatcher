@@ -37,3 +37,11 @@ h1 { font-size: 34px; line-height: 40px; letter-spacing: -0.02em; margin: 64px 0
   font: inherit;
   font-weight: 600;
 }
+
+a.button { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
+.empty { margin: 48px 0; text-align: center; }
+.empty p:first-child { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+
+.account { display: flex; flex-direction: column; gap: 12px; padding-bottom: 32px; }
+.account .muted { margin: 0; }
