@@ -1,4 +1,4 @@
-"""The feed checker: a Lambda that reads the Dealnews feed every 30 minutes and alerts users whose keywords match."""
+"""The feed checker: a Lambda that reads the Dealnews feeds every 30 minutes and alerts users whose keywords match."""
 
 from aws_cdk import Duration
 from aws_cdk import aws_dynamodb as dynamodb
