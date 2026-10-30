@@ -55,10 +55,14 @@ def fetch(url: str) -> bytes:
     """One of FEEDS. Anything else is refused, so this can only ever reach the addresses listed above."""
     if url not in FEEDS:
         raise ValueError("not a known feed")
+    # The Accept list ends with */*: on 2026-10-30 the Black Friday feed answered 406 Not Acceptable to a list of only RSS and XML
+    # types (same User-Agent; with */* added it answered 200). The body is still checked to be XML below.
     request = urllib.request.Request(  # noqa: S310 - only the fixed https addresses in FEEDS
-        url, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/xml;q=0.9"}
+        url, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.1"}
     )
     with _OPENER.open(request, timeout=10) as response:
+        if not response.headers.get_content_type().endswith("xml"):  # an HTML 200 (a challenge or consent page) is not a feed
+            raise ValueError("feed is not XML")
         body = response.read(MAX_BYTES + 1)
     if len(body) > MAX_BYTES:
         raise ValueError("feed is larger than expected")

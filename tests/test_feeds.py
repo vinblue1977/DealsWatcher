@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from email.message import Message
 from email.utils import format_datetime
 from typing import Any
 from xml.sax.saxutils import escape
@@ -100,11 +101,19 @@ class TestParse:
         assert [d["url"][-1] for d in dealnews.age_limit(NOW, deals, 6)] == ["1"]
 
 
+def xml_headers(content_type: str = "text/xml; charset=utf-8") -> Message:
+    headers = Message()
+    headers["Content-Type"] = content_type
+    return headers
+
+
 class TestFetch:
     def test_returns_the_body_and_identifies_itself(self, monkeypatch: pytest.MonkeyPatch) -> None:
         seen = {}
 
         class Response:
+            headers = xml_headers()
+
             def __enter__(self) -> Response:
                 return self
 
@@ -116,12 +125,15 @@ class TestFetch:
 
         def open_(request: Any, timeout: int) -> Response:
             seen["ua"], seen["url"], seen["timeout"] = request.get_header("User-agent"), request.full_url, timeout
+            seen["accept"] = request.get_header("Accept")
             return Response()
 
         monkeypatch.setattr(dealnews._OPENER, "open", open_)  # noqa: SLF001
         for url in dealnews.FEEDS:
             assert dealnews.fetch(url) == b"x" * 10
             assert seen["ua"].startswith("DealsWatcher/1.0") and seen["url"] == url and seen["timeout"] == 10
+            accept = [part.split(";")[0].strip() for part in seen["accept"].split(",")]
+            assert accept[:2] == ["application/rss+xml", "application/xml"] and accept[-1] == "*/*"  # no */* and it answers 406
         assert dealnews.FEEDS == (
             "https://www.dealnews.com/?rss=1",
             "https://www.dealnews.com/f1676/Black-Friday/?rss=1",
@@ -141,8 +153,27 @@ class TestFetch:
             with pytest.raises(ValueError, match="not a known feed"):
                 dealnews.fetch(url)
 
+    def test_refuses_a_page_that_is_not_xml(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        class Page:
+            headers = xml_headers("text/html; charset=UTF-8")
+
+            def __enter__(self) -> Page:
+                return self
+
+            def __exit__(self, *exc: object) -> None:
+                return None
+
+            def read(self, limit: int) -> bytes:
+                pytest.fail("the body of a non-XML answer must not be read")
+
+        monkeypatch.setattr(dealnews._OPENER, "open", lambda *a, **k: Page())  # noqa: SLF001
+        with pytest.raises(ValueError, match="not XML"):
+            dealnews.fetch(dealnews.MAIN_FEED)
+
     def test_refuses_an_oversized_feed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class Big:
+            headers = xml_headers()
+
             def __enter__(self) -> Big:
                 return self
 
