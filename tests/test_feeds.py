@@ -1,5 +1,6 @@
 """Feed checker: parsing the Dealnews feed, keyword matching, and saving and alerting once per deal."""
 
+import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -313,6 +314,36 @@ def deals_of(table: Any, user: str = USER) -> list[dict[str, Any]]:
 
 
 class TestHandler:
+    def test_logs_a_summary_of_counts_and_nothing_identifying(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        assert feeds.log.level == logging.INFO  # Lambda's logger starts at WARNING: without this the summary never shows
+        add_rule(table, keyword="OLED")
+        run(monkeypatch, item("1"), item("2", title="A toaster for $20"), black_friday=(item("3", minutes_ago=60 * 24),))
+        caplog.clear()
+        with caplog.at_level(logging.INFO, logger="feeds.handler"):
+            run(monkeypatch, item("1"), item("2", title="A toaster for $20"), black_friday=(item("3", minutes_ago=60 * 24),))
+        lines = [r.getMessage() for r in caplog.records]
+        assert f"feeds: {len(dealnews.FEEDS)} read, 0 failed, 0 skipped" in lines
+        assert (
+            "deals: 3 read, 2 recent, 1 matched (0 new, 1 already sent), 0 pushed, 0 failed" in lines
+        )  # the second run: all sent
+        text = " ".join(lines).lower()
+        assert not any(word in text for word in ("oled", "toaster", "dealnews", "http", USER, "best buy"))
+
+    def test_feeds_skipped_for_time_are_counted_as_skipped_not_read(
+        self, table: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, clock: FakeClock
+    ) -> None:
+        def slow(url: str) -> bytes:
+            clock.now += feeds.READ_BUDGET_SECONDS
+            return feed()
+
+        monkeypatch.setattr(feeds.dealnews, "fetch", slow)
+        monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
+        with caplog.at_level(logging.INFO, logger="feeds.handler"):
+            feeds.handler({}, None)
+        assert f"feeds: 2 read, 0 failed, {len(dealnews.FEEDS) - 2} skipped" in [r.getMessage() for r in caplog.records]
+
     def test_saves_a_matching_deal_and_alerts_once(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
         add_rule(table, keyword="OLED")
         assert run(monkeypatch, item("1"), item("2", title="Dyson Vacuum for $300")) == {"deals": 2, "saved": 1, "pushed": 1}

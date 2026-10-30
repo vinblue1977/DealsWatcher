@@ -196,7 +196,7 @@ class Web(Construct):
                 **push_env,
             },
             layers=[layer],
-            log_group=logs.LogGroup(self, "ApiLogs", retention=logs.RetentionDays.TWO_WEEKS),
+            log_group=logs.LogGroup(self, "ApiLogs", retention=logs.RetentionDays.THREE_DAYS),
         )
         # Only what the API does: no Scan, no batch or transactional writes.
         table.grant(fn, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query")
@@ -238,7 +238,7 @@ class Web(Construct):
             (apigw.HttpMethod.POST, "/me/push/test"),
         ):
             api.add_routes(path=path, methods=[method], integration=integration)
-        access_logs = logs.LogGroup(self, "ApiAccessLogs", retention=logs.RetentionDays.TWO_WEEKS)
+        access_logs = logs.LogGroup(self, "ApiAccessLogs", retention=logs.RetentionDays.THREE_DAYS)
         stage = apigw.HttpStage(
             self,
             "Stage",

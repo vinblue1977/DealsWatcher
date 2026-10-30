@@ -35,7 +35,7 @@ class Feeds(Construct):
             retry_attempts=0,  # the next scheduled run is 30 minutes away: no automatic retries, so one failed run is one error
             environment={"TABLE_NAME": table.table_name, **push_env},
             layers=[layer],
-            log_group=logs.LogGroup(self, "Logs", retention=logs.RetentionDays.TWO_WEEKS),
+            log_group=logs.LogGroup(self, "Logs", retention=logs.RetentionDays.THREE_DAYS),  # counts only, 48 runs a day
         )
         # Only what it does: scan for everyone's keyword rules, save deals and mark them sent,
         # and (via the push sender) read and prune devices.

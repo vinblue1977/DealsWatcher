@@ -14,6 +14,7 @@ from feeds.matching import matches
 from push.notify import notify
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)  # Lambda's logger starts at WARNING, which would hide the one-line run summary
 
 SOURCE = "dealnews"
 MAX_AGE_HOURS = 6  # a first run, or a long outage, must not alert on old deals
@@ -32,12 +33,14 @@ def _read_feeds() -> tuple[list[dict[str, Any]], list[str]]:
     """
     deals: dict[str, dict[str, Any]] = {}
     down: list[str] = []
+    read = skipped = 0
     first_error: Exception | None = None
     started = time.monotonic()
     for number, url in enumerate(dealnews.FEEDS):
         if number:
             if time.monotonic() - started > READ_BUDGET_SECONDS:
                 log.warning("read budget spent, skipping feed: %s", url)
+                skipped += 1
                 continue
             time.sleep(PAUSE_SECONDS)
         try:
@@ -46,10 +49,12 @@ def _read_feeds() -> tuple[list[dict[str, Any]], list[str]]:
                 for field in ("price", "retailer", "category"):  # a copy without a price must not hide a priced one
                     if kept[field] is None and deal[field] is not None:
                         kept[field] = deal[field]
+            read += 1
         except Exception as e:
             log.exception("feed could not be read: %s", url)
             first_error = first_error or e
             down.append(url)
+    log.info("feeds: %d read, %d failed, %d skipped", read, len(down), skipped)  # counts only: no keywords, titles or addresses
     if len(down) == len(dealnews.FEEDS) and first_error is not None:
         raise first_error
     return sorted(deals.values(), key=lambda d: d["published"], reverse=True), [u for u in down if u in dealnews.REQUIRED]
@@ -110,16 +115,18 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
     now = datetime.now(UTC)
     found, feeds_down = _read_feeds()
     deals = dealnews.age_limit(now, found, MAX_AGE_HOURS)
-    saved = pushed = failed = 0
+    saved = pushed = failed = matched = already_sent = 0
     for user, rules in _rules_by_user(table).items():
         attempts = 0
         for deal in deals:
             rule = next((r for r in rules if matches(r, deal, SOURCE)), None)
             if rule is None:
                 continue
+            matched += 1
             try:  # one deal or user failing must not stop the others
                 key, state = _claim(table, user, deal, rule, now)
                 saved += state == "new"
+                already_sent += state == "done"
                 if state == "done" or attempts >= MAX_PUSHES:
                     continue  # over the cap: stays unsent, goes out on a later run
                 attempts += 1  # counted even if it fails, so a broken push path can't bypass the cap
@@ -128,6 +135,16 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
             except Exception:
                 log.exception("deal alert failed")
                 failed += 1
+    log.info(
+        "deals: %d read, %d recent, %d matched (%d new, %d already sent), %d pushed, %d failed",
+        len(found),
+        len(deals),
+        matched,
+        saved,
+        already_sent,
+        pushed,
+        failed,
+    )
     if failed or feeds_down:  # shows as a Lambda error; unsent alerts are retried next run
         raise RuntimeError(f"{failed} deal alerts failed; feeds down: {', '.join(feeds_down) or 'none'}")
     return {"deals": len(deals), "saved": saved, "pushed": pushed}
