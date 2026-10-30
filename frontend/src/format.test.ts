@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ago, initials, money, parsePrice, retailerFor, ruleLine, safeLink, summary, targetMoney, visibleWatches, watchState } from './format';
+import { ago, initials, money, parseName, parsePrice, retailerFor, ruleLine, safeLink, summary, targetMoney, visibleWatches, watchState } from './format';
 import type { Rule, Watch } from './types';
 
 const watch = (over: Partial<Watch> = {}): Watch => ({
@@ -123,5 +123,14 @@ describe('visibleWatches', () => {
     expect(visibleWatches(list, 'all')).toHaveLength(3);
     expect(visibleWatches(list, 'target').map((w) => w.id)).toEqual(['a']);
     expect(visibleWatches(list, 'attention').map((w) => w.id)).toEqual(['c']);
+  });
+});
+
+describe('parseName', () => {
+  it('trims the name', () => expect(parseName('  TV in the den  ')).toBe('TV in the den'));
+  it.each(['', '   '])('refuses %j', (text) => expect(parseName(text)).toBeNull());
+  it('counts characters, not UTF-16 units, against the 120 limit', () => {
+    expect(parseName('😀'.repeat(120))).toBe('😀'.repeat(120));
+    expect(parseName('a'.repeat(121))).toBeNull();
   });
 });

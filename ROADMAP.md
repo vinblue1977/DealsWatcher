@@ -52,7 +52,7 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 
 - [ ] Quiet hours (Settings mockup; the app already stores the device time zone, the checker does not use it yet)
 - [ ] Appearance: Light and Auto (colours are tokens in `frontend/src/styles.css`)
-- [ ] Rename a watch on the Detail screen (the API supports it; old guessed names stay until renamed or re-added)
+- [x] Rename a watch on the Detail screen (Name field above the price limit)
 - [ ] Edit a keyword's highest price and feeds in the Keywords screen
 - [ ] Price-history chart on Detail (needs checker data)
 - [ ] Optional digest instead of one push per deal
