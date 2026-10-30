@@ -1,4 +1,8 @@
-"""The Dealnews feeds: public RSS (its robots.txt allows it; polled every 30 minutes): the main deals feed and Black Friday."""
+"""The Dealnews feeds: public RSS, polled every 30 minutes. Its robots.txt allows it and its RSS page says they are free to use.
+
+Each feed lists only its latest ~50 deals, so the main feed alone misses deals that scroll off it: the category, popular and
+editors' feeds add deals the main one no longer shows. The links in the feeds are used unchanged.
+"""
 
 import hashlib
 import re
@@ -12,8 +16,23 @@ from xml.etree import ElementTree  # noqa: S405 - bodies with a DOCTYPE or ENTIT
 
 MAIN_FEED = "https://www.dealnews.com/?rss=1"  # the latest deals
 BLACK_FRIDAY_FEED = "https://www.dealnews.com/f1676/Black-Friday/?rss=1"  # store-wide sales, mostly without a price
-FEEDS = (MAIN_FEED, BLACK_FRIDAY_FEED)
-REQUIRED = (MAIN_FEED,)  # the Black Friday feed is seasonal: if it disappears, that is logged, not an error
+MOST_POPULAR_FEED = "https://www.dealnews.com/?rss=1&sort=hotness"
+STAFF_PICK_FEED = "https://www.dealnews.com/f1682/Staff-Pick/?rss=1"  # the editors' choice
+ELECTRONICS_FEED = "https://www.dealnews.com/c142/Electronics/?rss=1"
+COMPUTERS_FEED = "https://www.dealnews.com/c39/Computers/?rss=1"
+CLOTHING_FEED = "https://www.dealnews.com/c202/Clothing-Accessories/?rss=1"
+HOME_GARDEN_FEED = "https://www.dealnews.com/c196/Home-Garden/?rss=1"
+FEEDS = (
+    MAIN_FEED,
+    BLACK_FRIDAY_FEED,
+    MOST_POPULAR_FEED,
+    STAFF_PICK_FEED,
+    ELECTRONICS_FEED,
+    COMPUTERS_FEED,
+    CLOTHING_FEED,
+    HOME_GARDEN_FEED,
+)
+REQUIRED = (MAIN_FEED,)  # the others are extras (Black Friday is seasonal): if one fails, that is logged, not an error
 USER_AGENT = "DealsWatcher/1.0 (personal deal alerts; +https://github.com/vinblue1977/DealsWatcher)"
 MAX_BYTES = 2_000_000
 _PRICE = re.compile(r"\d{1,5}(\.\d{1,2})?")

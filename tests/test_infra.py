@@ -279,9 +279,9 @@ def _feed_function(template: Template) -> dict:
     return function["Properties"]
 
 
-def test_feed_checker_runs_every_30_minutes_with_a_short_timeout() -> None:
+def test_feed_checker_runs_every_30_minutes_and_has_room_for_all_its_feeds_in_its_timeout() -> None:
     template = _template()
-    assert _feed_function(template)["Timeout"] == 60
+    assert _feed_function(template)["Timeout"] == 90  # feed reading stops starting feeds after 40 s
     template.has_resource_properties("AWS::Events::Rule", {"ScheduleExpression": "rate(30 minutes)", "State": "ENABLED"})
 
 

@@ -26,7 +26,8 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 
 | Source | Status | Notes |
 |---|---|---|
-| Dealnews main feed | **Live** | Public RSS, robots.txt allows it, 50 latest deals |
+| Dealnews main feed | **Live** | Public RSS, robots.txt allows it, 50 latest deals. Its RSS page (dealnews.com/rss/, read 2026-10-30) says "the feeds are yours to use": links and referral codes must stay unchanged, credit Dealnews if published publicly, and the feed content may not go in a public browser extension |
+| Dealnews extra feeds | **Live** | Most Popular, Staff Pick (editors' choice), and the Electronics, Computers, Clothing & Accessories and Home & Garden categories: each adds deals the main feed has already scrolled past (a test on 2026-10-30 found 24-36 not in the main feed, per feed). Optional: one failing is logged, not an error. Eight requests per run, 1 s apart; reading stops starting new feeds after 40 s |
 | Dealnews Black Friday feed | **Live** | Store-wide sales, mostly without a price; a price limit on a keyword skips them. Seasonal: if it disappears after the season it is logged, not an error |
 | blackfriday.com | Idea, on hold | robots.txt allows its sitemap (327 store ad pages under `/ads/`), but it has no feed and its terms of use have **not been read yet**. Idea: detect new `/ads/` pages by comparing sitemap copies (a store posted its ad), sitemap dates are unreliable, so diff the URL list. No prices |
 | Reddit | Skipped for now (2026-10-30) | robots.txt disallows everything. Two permitted routes, both need Reddit's approval: the official API with your own app credentials (access must be requested and approved first), or a small Devvit app installed in your own subreddit that searches the deal subreddits (`reddit.searchPosts` with `subredditName`, no key) and sends results to a new ingest route (HTTP fetch needs Reddit to approve our API hostname). Not worth it before Black Friday: a second codebase, a new public route to secure, untested cross-subreddit reads, Reddit's developer terms unread. Revisit after Black Friday if you still miss deals |
@@ -70,7 +71,9 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 - [ ] `notify` re-queries a user's devices per deal (at most 5 per run): fetch once per user
 - [ ] Share the "load / retry" notice and fetch pattern across screens (repeated in five places)
 - [ ] Rendering tests for the screens (needs a DOM test setup and a new dev dependency; the logic is covered by pure-function tests)
-- [ ] Fetch feeds concurrently if more are added
+- [ ] Fetch feeds concurrently if more are added (today one after another with a 1 s pause)
+- [ ] A dead or renumbered extra Dealnews feed (a changed category id, say) is only logged, so nothing alerts you; add a metric or alarm if coverage matters (an alarm costs ~$0.10/month past the free 10)
+- [ ] A broad keyword (like "TV") on the first run after new feeds can match many deals, but only 5 pushes go out per user per run and deals older than 6 hours are dropped; raise the cap or add a digest if that bites
 - [ ] An alarm for the checker not running at all (no invocations for hours): a second alarm, ~$0.10/month once past the free 10
 - [ ] Alerts left unsent are only retried while their deal is still in a feed and under 6 hours old
 - [ ] Duplicate keyword check is read-then-write: two simultaneous adds can slip past (strict fix needs a different key design)

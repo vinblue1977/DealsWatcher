@@ -31,7 +31,7 @@ class Feeds(Construct):
             handler="feeds.handler.handler",
             code=lambda_.Code.from_asset("backend", exclude=["**/__pycache__"]),
             memory_size=256,
-            timeout=Duration.seconds(60),
+            timeout=Duration.seconds(90),  # no new feed starts after 40 s; the rest is the scan and pushes
             retry_attempts=0,  # the next scheduled run is 30 minutes away: no automatic retries, so one failed run is one error
             environment={"TABLE_NAME": table.table_name, **push_env},
             layers=[layer],
