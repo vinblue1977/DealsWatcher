@@ -122,8 +122,18 @@ class TestFetch:
         for url in dealnews.FEEDS:
             assert dealnews.fetch(url) == b"x" * 10
             assert seen["ua"].startswith("DealsWatcher/1.0") and seen["url"] == url and seen["timeout"] == 10
-        assert dealnews.FEEDS == ("https://www.dealnews.com/?rss=1", "https://www.dealnews.com/f1676/Black-Friday/?rss=1")
-        assert dealnews.REQUIRED == (dealnews.MAIN_FEED,)
+        assert dealnews.FEEDS == (
+            "https://www.dealnews.com/?rss=1",
+            "https://www.dealnews.com/f1676/Black-Friday/?rss=1",
+            "https://www.dealnews.com/?rss=1&sort=hotness",
+            "https://www.dealnews.com/f1682/Staff-Pick/?rss=1",
+            "https://www.dealnews.com/c142/Electronics/?rss=1",
+            "https://www.dealnews.com/c39/Computers/?rss=1",
+            "https://www.dealnews.com/c202/Clothing-Accessories/?rss=1",
+            "https://www.dealnews.com/c196/Home-Garden/?rss=1",
+        )
+        assert len(set(dealnews.FEEDS)) == len(dealnews.FEEDS)
+        assert dealnews.REQUIRED == (dealnews.MAIN_FEED,)  # the seven extras may fail without turning the checker red
 
     def test_only_the_listed_feeds_can_be_fetched(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(dealnews._OPENER, "open", lambda *a, **k: pytest.fail("must not make a request"))  # noqa: SLF001
@@ -197,6 +207,29 @@ class TestMatching:
 USER, OTHER = "user-1", "user-2"
 
 
+class FakeClock:
+    """Stands in for the handler's `time` module only (not the real one): pauses are recorded, not slept, and each pause
+    moves the clock on."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+    def monotonic(self) -> float:
+        return self.now
+
+
+@pytest.fixture(autouse=True)
+def clock(monkeypatch: pytest.MonkeyPatch) -> FakeClock:
+    fake = FakeClock()
+    monkeypatch.setattr(feeds, "time", fake)
+    return fake
+
+
 @pytest.fixture
 def table(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     monkeypatch.setenv("TABLE_NAME", "test-table")
@@ -229,8 +262,16 @@ def add_rule(table: Any, user: str = USER, rid: str = "r1", **over: Any) -> None
     )
 
 
-def run(monkeypatch: pytest.MonkeyPatch, *items: str, black_friday: tuple[str, ...] = ()) -> dict[str, int]:
-    bodies = {dealnews.FEEDS[0]: feed(*items), dealnews.FEEDS[1]: feed(*black_friday)}
+def run(
+    monkeypatch: pytest.MonkeyPatch,
+    *items: str,
+    black_friday: tuple[str, ...] = (),
+    extra: dict[str, tuple[str, ...]] | None = None,
+) -> dict[str, int]:
+    """One checker run. `extra` gives the items of other feeds by address; every feed not given is empty."""
+    bodies = {url: feed() for url in dealnews.FEEDS}
+    bodies |= {dealnews.MAIN_FEED: feed(*items), dealnews.BLACK_FRIDAY_FEED: feed(*black_friday)}
+    bodies |= {url: feed(*listed) for url, listed in (extra or {}).items()}
     monkeypatch.setattr(feeds.dealnews, "fetch", lambda url: bodies[url])
     monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
     return feeds.handler({}, None)
@@ -457,6 +498,43 @@ class TestBlackFridayFeed:
         self.one_feed_down(monkeypatch, dealnews.BLACK_FRIDAY_FEED)
         assert feeds.handler({}, None) == {"deals": 1, "saved": 1, "pushed": 1}  # after the season the feed may 404: stay green
 
+    def test_a_deal_only_an_extra_feed_lists_is_alerted(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="OLED")
+        extra = {dealnews.COMPUTERS_FEED: (item("7", title="OLED monitor"),)}
+        assert run(monkeypatch, extra=extra) == {"deals": 1, "saved": 1, "pushed": 1}
+
+    def test_a_copy_without_a_price_does_not_hide_the_priced_one(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="OLED", maxPrice=Decimal(1200))
+        sale = item("1", price=None)  # the Black Friday feed lists it with no price...
+        priced = item("1", price="999.00")  # ...the Electronics feed with one, under the limit
+        assert run(monkeypatch, black_friday=(sale,), extra={dealnews.ELECTRONICS_FEED: (priced,)})["saved"] == 1
+        assert len(pushes) == 1
+
+    def test_every_extra_feed_going_away_is_not_an_error(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="OLED")
+        for extra in dealnews.FEEDS[1:]:
+            self.one_feed_down(monkeypatch, extra)
+            assert feeds.handler({}, None)["deals"] == 1  # none of them turns the checker red
+
+    def test_requests_are_spaced_out(self, table: Any, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
+        run(monkeypatch)
+        assert clock.sleeps == [feeds.PAUSE_SECONDS] * (len(dealnews.FEEDS) - 1)  # a pause between feeds, none before the first
+
+    def test_a_slow_host_cannot_use_up_the_run(self, table: Any, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
+        asked: list[str] = []
+
+        def slow(url: str) -> bytes:
+            asked.append(url)
+            clock.now += feeds.READ_BUDGET_SECONDS  # every feed takes the whole budget
+            return feed()
+
+        monkeypatch.setattr(feeds.dealnews, "fetch", slow)
+        monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
+        feeds.handler({}, None)
+        assert asked == list(dealnews.FEEDS[:2])  # the main feed, then one more; the rest are skipped, and that is not an error
+
     def test_the_main_feed_down_still_alerts_from_the_other_and_is_reported(
         self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -466,8 +544,8 @@ class TestBlackFridayFeed:
             feeds.handler({}, None)
         assert len(pushes) == 1 and len(deals_of(table)) == 1  # the working feed was still processed
 
-    def test_both_feeds_down_raises_the_first_error(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-        errors = iter([OSError("main down"), OSError("black friday down")])
+    def test_every_feed_down_raises_the_first_error(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        errors = iter([OSError("main down"), *(OSError("an extra feed down") for _ in dealnews.FEEDS[1:])])
 
         def fetch(url: str) -> bytes:
             raise next(errors)

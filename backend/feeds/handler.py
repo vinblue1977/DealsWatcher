@@ -2,6 +2,7 @@
 
 import logging
 import os
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -17,22 +18,34 @@ log = logging.getLogger(__name__)
 SOURCE = "dealnews"
 MAX_AGE_HOURS = 6  # a first run, or a long outage, must not alert on old deals
 KEEP_DAYS = 30
+PAUSE_SECONDS = 1  # between feed requests: a few small requests, spaced out, every 30 minutes
+READ_BUDGET_SECONDS = 40  # past this, the remaining extra feeds are skipped so a slow host cannot eat the whole run
 MAX_PUSHES = 5  # per user per run; deals over the cap stay unsent and go out on the next run
 
 
 def _read_feeds() -> tuple[list[dict[str, Any]], list[str]]:
-    """Deals from every feed, newest first, each deal once (one in two feeds counts once), and the required feeds that failed.
+    """Deals from every feed, newest first, each deal once (one in several feeds counts once), and the required feeds that failed.
 
-    One feed being down must not hide the other's deals. If every feed fails, the first error is raised. A failing optional
-    feed (the seasonal Black Friday one) is only logged, so it cannot keep the checker permanently red.
+    One feed being down must not hide the others' deals. If every feed fails, the first error is raised. A failing extra feed
+    (Black Friday, popular, editors', categories) is only logged, so it cannot keep the checker permanently red. Once the read
+    budget is spent the remaining extras are skipped (logged), so a slow host cannot use up the run.
     """
     deals: dict[str, dict[str, Any]] = {}
     down: list[str] = []
     first_error: Exception | None = None
-    for url in dealnews.FEEDS:
+    started = time.monotonic()
+    for number, url in enumerate(dealnews.FEEDS):
+        if number:
+            if time.monotonic() - started > READ_BUDGET_SECONDS:
+                log.warning("read budget spent, skipping feed: %s", url)
+                continue
+            time.sleep(PAUSE_SECONDS)
         try:
             for deal in dealnews.parse(dealnews.fetch(url)):
-                deals.setdefault(deal["id"], deal)
+                kept = deals.setdefault(deal["id"], deal)
+                for field in ("price", "retailer", "category"):  # a copy without a price must not hide a priced one
+                    if kept[field] is None and deal[field] is not None:
+                        kept[field] = deal[field]
         except Exception as e:
             log.exception("feed could not be read: %s", url)
             first_error = first_error or e
