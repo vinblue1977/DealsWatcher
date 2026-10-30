@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api, ApiError } from './api';
-import { ago, money, parsePrice, retailerFor, targetMoney, watchState } from './format';
+import { ago, money, parseName, parsePrice, retailerFor, targetMoney, watchState } from './format';
 import { Switch } from './Switch';
 import { go } from './router';
 import type { Watch, WatchPatch } from './types';
@@ -12,6 +12,7 @@ export function Detail({ id }: { id: string }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [target, setTarget] = useState('');
+  const [name, setName] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -22,6 +23,7 @@ export function Detail({ id }: { id: string }) {
         if (!live) return;
         setWatch(found);
         setTarget(String(found.targetPrice));
+        setName(found.title);
       },
       (e: Error) => {
         if (!live) return;
@@ -41,6 +43,7 @@ export function Detail({ id }: { id: string }) {
       const updated = await api.editWatch(id, patch);
       setWatch(updated);
       if (patch.targetPrice !== undefined) setTarget(String(updated.targetPrice)); // other changes keep a half-typed target
+      if (patch.title !== undefined) setName(updated.title); // the name field is disabled while saving, so nothing typed is lost
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -100,6 +103,8 @@ export function Detail({ id }: { id: string }) {
   const state = watchState(watch);
   const newTarget = parsePrice(target);
   const targetChanged = newTarget !== null && newTarget !== watch.targetPrice;
+  const newName = parseName(name);
+  const nameChanged = newName !== null && newName !== watch.title;
   const productLink = retailerFor(watch.url) ? watch.url : null; // only ever link to a store we recognise
 
   return (
@@ -132,19 +137,30 @@ export function Detail({ id }: { id: string }) {
         </div>
       )}
 
-      <div class="field">
+      <form class="field" onSubmit={(e) => { e.preventDefault(); if (!busy && nameChanged) void change({ title: newName }); }}>
+        <label for="name">Name</label>
+        <div class="row">
+          <input id="name" autoComplete="off" maxLength={240} disabled={busy} value={name} onInput={(e) => setName(e.currentTarget.value)} />
+          <button class="button primary" type="submit" aria-label="Save name" disabled={busy || !nameChanged}>
+            Save
+          </button>
+        </div>
+        {newName === null && <div class="muted small">Enter a name up to 120 characters.</div>}
+      </form>
+
+      <form class="field" onSubmit={(e) => { e.preventDefault(); if (!busy && targetChanged && newTarget !== null) void change({ targetPrice: newTarget }); }}>
         <label for="target">Alert me at or below</label>
         <div class="row">
           <div class="money grow-row">
             <span aria-hidden="true">$</span>
             <input id="target" inputMode="decimal" autoComplete="off" maxLength={9} value={target} onInput={(e) => setTarget(e.currentTarget.value)} />
           </div>
-          <button class="button primary" type="button" disabled={busy || !targetChanged} onClick={() => newTarget !== null && change({ targetPrice: newTarget })}>
+          <button class="button primary" type="submit" aria-label="Save price limit" disabled={busy || !targetChanged}>
             Save
           </button>
         </div>
         <div class="muted small">{newTarget === null ? 'Enter a price like 199 or 199.99.' : `Currently ${targetMoney(watch.targetPrice)}.`}</div>
-      </div>
+      </form>
 
       <div class="group">
         <Switch on={watch.alertOnDrop} label="Also alert on drops of 10% or more" disabled={busy} onChange={(on) => change({ alertOnDrop: on })} />

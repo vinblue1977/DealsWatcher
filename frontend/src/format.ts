@@ -52,6 +52,12 @@ export function parsePrice(text: string): number | null {
   return amount > 0 && amount < 100000 ? amount : null;
 }
 
+/** A watch name typed by the user, trimmed; null if empty or over 120 characters (counted like the API does, by code points). */
+export function parseName(text: string): string | null {
+  const name = text.trim();
+  return name.length > 0 && [...name].length <= 120 ? name : null;
+}
+
 /** "Best Buy" becomes "BB", "Target" becomes "T". */
 export function initials(store: string): string {
   const words = store.split(/\s+/).filter(Boolean);
