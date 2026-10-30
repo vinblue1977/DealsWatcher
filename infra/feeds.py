@@ -53,7 +53,7 @@ class Feeds(Construct):
         events.Rule(
             self,
             "Every30Minutes",
-            schedule=events.Schedule.rate(Duration.minutes(30)),
+            schedule=events.Schedule.cron(minute="0,30"),  # :00 and :30 as asked; the id is kept so the rule updates in place
             targets=[targets.LambdaFunction(fn, retry_attempts=1)],  # pyright: ignore[reportArgumentType]
         )
         NagSuppressions.add_resource_suppressions(
