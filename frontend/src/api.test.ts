@@ -32,6 +32,7 @@ describe('api client', () => {
     ['deleteWatch', () => api.deleteWatch('w1'), 'DELETE', '/me/watches/w1', undefined],
     ['addRule', () => api.addRule({ keyword: 'OLED' }), 'POST', '/me/rules', { keyword: 'OLED' }],
     ['editRule', () => api.editRule('r1', { enabled: false }), 'PUT', '/me/rules/r1', { enabled: false }],
+    ['editRule (any price)', () => api.editRule('r1', { maxPrice: null }), 'PUT', '/me/rules/r1', { maxPrice: null }], // null must reach the API, not be dropped
     ['deleteRule', () => api.deleteRule('r1'), 'DELETE', '/me/rules/r1', undefined],
     ['pushOff', () => api.pushOff('https://web.push.apple.com/x'), 'DELETE', '/me/push', { endpoint: 'https://web.push.apple.com/x' }],
     ['pushTest', () => api.pushTest('https://web.push.apple.com/x'), 'POST', '/me/push/test', { endpoint: 'https://web.push.apple.com/x' }],
