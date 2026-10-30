@@ -1,8 +1,10 @@
 // Cognito managed login with authorization code + PKCE, and a session that stays signed in.
 //
-// Tokens live in localStorage. The app client's refresh token lasts a year, so the access token (1 hour) is renewed
-// quietly: on demand, shortly before it expires (keepFresh), when the app comes back to the foreground, and after a 401.
-// Only a *rejected* refresh token (HTTP 4xx) sends the person back to sign in; a network blip keeps the session.
+// Tokens live in localStorage. The app client's refresh token lasts a year and is rotated: every renewal returns a new
+// one, which replaces the old (so the session runs a year from last use). The access token (1 hour) is renewed quietly:
+// on demand, shortly before it expires (keepFresh), when the app comes back to the foreground, and after a 401.
+// Only a *rejected* refresh token (HTTP 400/401) sends the person back to sign in; a network blip, throttling or a server
+// error keeps the session. If another tab already rotated the token we sent, we adopt its tokens instead of signing out.
 // Tradeoff: localStorage is readable by any script on this origin; the strict CSP (no inline or third-party scripts) and the
 // lint rules against HTML sinks are what protect it. iOS clears website data after 7 days of non-use in Safari tabs but not
 // for Home Screen apps, which is how the app is meant to be used.
@@ -83,7 +85,7 @@ function save(t: TokenResponse): void {
   const tokens: Tokens = {
     access_token: t.access_token,
     id_token: t.id_token ?? prev?.id_token,
-    refresh_token: t.refresh_token ?? prev?.refresh_token, // a refresh response doesn't repeat the refresh token
+    refresh_token: t.refresh_token ?? prev?.refresh_token, // a response without a refresh token (rotation off) keeps the old one
     expires_at: Date.now() + (t.expires_in ?? 3600) * 1000,
   };
   local((ls) => ls.setItem(STORE, JSON.stringify(tokens))); // blocked storage: the session just won't persist
@@ -194,9 +196,12 @@ export async function getAccessToken(forceRefresh = false): Promise<string | nul
       refreshing ??= tokenRequest({ grant_type: 'refresh_token', refresh_token: refreshToken }).finally(() => (refreshing = undefined));
       save(await refreshing);
     } catch (e) {
-      // Only a rejected refresh token ends the session; a network blip or server error keeps it.
+      // Only a rejected refresh token ends the session; a network blip, throttling (429) or server error keeps it.
       const status = (e as { status?: number }).status ?? 0;
-      if (status < 400 || status >= 500) throw e;
+      if (status !== 400 && status !== 401) throw e;
+      // Rotation: another tab may have swapped the token we sent for a newer one. Use that rather than sign out.
+      const current = load();
+      if (current?.refresh_token && current.refresh_token !== refreshToken) return current.access_token;
       local((ls) => ls.removeItem(STORE));
       await login();
       return null;

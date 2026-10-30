@@ -154,7 +154,8 @@ class Web(Construct):
             generate_secret=False,  # public browser client (authorization code + PKCE)
             access_token_validity=Duration.hours(1),
             id_token_validity=Duration.hours(1),
-            refresh_token_validity=Duration.days(365),  # stays signed in on the phone for a year; the app refreshes quietly
+            refresh_token_validity=Duration.days(365),  # a year from the last renewal: each refresh issues a new refresh token
+            refresh_token_rotation_grace_period=Duration.seconds(60),  # the old token works 60 s more, for a quick retry
             enable_token_revocation=True,
             o_auth=cognito.OAuthSettings(
                 flows=cognito.OAuthFlows(authorization_code_grant=True),
