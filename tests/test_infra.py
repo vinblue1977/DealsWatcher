@@ -283,6 +283,12 @@ def test_feed_checker_has_room_for_all_its_feeds_in_its_timeout() -> None:
     assert _feed_function(_template())["Timeout"] == 90  # feed reading stops starting feeds after 40 s
 
 
+def test_every_log_group_is_kept_for_three_days() -> None:
+    groups = _template().find_resources("AWS::Logs::LogGroup")
+    assert len(groups) >= 3  # the checker, the API and the API access log
+    assert {g["Properties"].get("RetentionInDays") for g in groups.values()} == {3}
+
+
 def test_feed_checker_runs_on_the_hour_and_half_hour() -> None:
     template = _template()
     (checker_id,) = [
