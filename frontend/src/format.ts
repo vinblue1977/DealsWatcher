@@ -52,6 +52,11 @@ export function parsePrice(text: string): number | null {
   return amount > 0 && amount < 100000 ? amount : null;
 }
 
+/** A keyword's highest price as typed: a number, null for "any price" (empty), or undefined if it is not a valid amount. */
+export function parseMaxPrice(text: string): number | null | undefined {
+  return text.trim() === '' ? null : (parsePrice(text) ?? undefined);
+}
+
 /** A watch name typed by the user, trimmed; null if empty or over 120 characters (counted like the API does, by code points). */
 export function parseName(text: string): string | null {
   const name = text.trim();

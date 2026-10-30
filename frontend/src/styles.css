@@ -165,7 +165,8 @@ input.text { height: 48px; padding: 0 14px; border-radius: 12px; border: 1px sol
 .fab:disabled { opacity: 0.5; }
 .keyword { font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
 .textbutton { min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; }
-.grow > .textbutton { margin: -8px 0; }
+.grow > .textbutton, .grow > .actions { margin: -8px 0; } /* keeps keyword cards short */
+.actions { gap: 20px; }
 .confirm { gap: 8px; margin-top: 4px; }
 .confirm .button { min-height: 40px; }
 

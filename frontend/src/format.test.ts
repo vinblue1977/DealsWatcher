@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ago, initials, money, parseName, parsePrice, retailerFor, ruleLine, safeLink, summary, targetMoney, visibleWatches, watchState } from './format';
+import { ago, initials, money, parseMaxPrice, parseName, parsePrice, retailerFor, ruleLine, safeLink, summary, targetMoney, visibleWatches, watchState } from './format';
 import type { Rule, Watch } from './types';
 
 const watch = (over: Partial<Watch> = {}): Watch => ({
@@ -133,4 +133,10 @@ describe('parseName', () => {
     expect(parseName('😀'.repeat(120))).toBe('😀'.repeat(120));
     expect(parseName('a'.repeat(121))).toBeNull();
   });
+});
+
+describe('parseMaxPrice', () => {
+  it('reads an amount', () => expect(parseMaxPrice('$1,200')).toBe(1200));
+  it.each(['', '  '])('treats %j as any price', (text) => expect(parseMaxPrice(text)).toBeNull());
+  it.each(['abc', '0', '-5', '1,99'])('refuses %j', (text) => expect(parseMaxPrice(text)).toBeUndefined());
 });

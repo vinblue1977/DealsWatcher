@@ -59,7 +59,7 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 - [ ] Quiet hours (Settings mockup; the app already stores the device time zone, the checker does not use it yet)
 - [ ] Appearance: Light and Auto (colours are tokens in `frontend/src/styles.css`)
 - [x] Rename a watch on the Detail screen (Name field above the price limit)
-- [ ] Edit a keyword's highest price and feeds in the Keywords screen
+- [x] Edit a keyword's highest price in the Keywords screen. Choosing feeds per keyword is not offered: Dealnews is the only live feed, so there is nothing to choose yet
 - [ ] Price-history chart on Detail (needs checker data)
 - [ ] Optional digest instead of one push per deal
 - [ ] More users (items are keyed per user; checks would be shared per product link)
