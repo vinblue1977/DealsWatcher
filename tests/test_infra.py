@@ -279,10 +279,21 @@ def _feed_function(template: Template) -> dict:
     return function["Properties"]
 
 
-def test_feed_checker_runs_every_30_minutes_and_has_room_for_all_its_feeds_in_its_timeout() -> None:
+def test_feed_checker_has_room_for_all_its_feeds_in_its_timeout() -> None:
+    assert _feed_function(_template())["Timeout"] == 90  # feed reading stops starting feeds after 40 s
+
+
+def test_feed_checker_runs_on_the_hour_and_half_hour() -> None:
     template = _template()
-    assert _feed_function(template)["Timeout"] == 90  # feed reading stops starting feeds after 40 s
-    template.has_resource_properties("AWS::Events::Rule", {"ScheduleExpression": "rate(30 minutes)", "State": "ENABLED"})
+    (checker_id,) = [
+        name
+        for name, f in template.find_resources("AWS::Lambda::Function").items()
+        if f["Properties"].get("Handler") == "feeds.handler.handler"
+    ]
+    (rule,) = [r["Properties"] for r in template.find_resources("AWS::Events::Rule").values()]
+    assert rule["ScheduleExpression"] == "cron(0,30 * * * ? *)" and rule["State"] == "ENABLED"  # :00 and :30, 30 minutes apart
+    (target,) = rule["Targets"]
+    assert target["Arn"] == {"Fn::GetAtt": [checker_id, "Arn"]}  # and it starts the checker, not something else
 
 
 def test_feed_checker_can_only_use_the_table_operations_it_needs() -> None:
