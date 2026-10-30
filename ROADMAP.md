@@ -9,7 +9,7 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 - [x] Phase 0: dark-mode iPhone mockups approved (`docs/design`)
 - [x] Phase 1: repo + CI skeleton (same checks as TennisTracker)
 - [x] Phase 2: AWS foundation (table, GitHub OIDC deploy role), CI deploy jobs, VAPID key in SSM. Account-wide cost budgets ($5, alerts at 80% and 100%) already exist
-- [x] Phase 3: hosting (private S3 behind CloudFront), passkey sign-in (365-day session), API, app sign-in
+- [x] Phase 3: hosting (private S3 behind CloudFront), passkey sign-in (session renewed on every refresh, up to a year idle), API, app sign-in
 - [x] Phase 4: PWA screens (Watching, Add, Detail, Deals, Keywords, Settings), service worker, push notifications, install hint, app icon
 - [x] Phase 6: feed checker for Dealnews: the main feed (`dealnews.com/?rss=1`) and the Black Friday feed (`dealnews.com/f1676/Black-Friday/?rss=1`), every 30 minutes, keyword alerts with one push per deal
 - [x] Security hardening pass (least-privilege table access, request size cap, push endpoint kept out of URLs)
@@ -18,8 +18,8 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 
 ## Next
 
-1. [ ] **Alert email: finish setup.** The topic and the crash alarm are in place (one alarm; each alarm past the account's free 10 would cost ~$0.10/month). **Needs you**: store the address as the `ALERT_EMAIL` secret in the GitHub `production` environment (never in the repo), run the deploy, then click the confirmation link AWS emails you. Check by temporarily failing the checker, or trust the alarm test
-2. [ ] Keep people signed in while they use the app: rotate refresh tokens so each renewal extends the session (today it is a fixed year from sign-in). Own small PR: it changes sign-in
+1. [x] Alert email: topic, crash alarm and the `ALERT_EMAIL` secret are in place and the subscription is confirmed (2026-10-30)
+2. [x] Refresh-token rotation: every renewal issues a new refresh token (60 s grace for retries), so the session runs a year from the last renewal; a refresh whose response is lost, or an old token reused after 60 s, still needs a fresh sign-in
 3. [ ] Phase 7: Black Friday polish (see App polish below); Black Friday 2026 is Nov 27
 
 ## Sources and feeds

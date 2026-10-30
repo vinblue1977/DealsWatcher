@@ -173,6 +173,17 @@ def test_every_taggable_resource_has_the_project_tag() -> None:
     assert untagged == []
 
 
+def test_refresh_tokens_rotate_so_each_renewal_extends_the_session() -> None:
+    _template().has_resource_properties(
+        "AWS::Cognito::UserPoolClient",
+        {
+            "RefreshTokenRotation": {"Feature": "ENABLED", "RetryGracePeriodSeconds": 60},
+            "RefreshTokenValidity": 365 * 24 * 60,
+            "EnableTokenRevocation": True,
+        },
+    )
+
+
 def test_the_web_push_public_key_is_configured_so_the_app_can_subscribe() -> None:
     key = json.loads(Path("cdk.json").read_text())["context"]["vapidPublicKey"]
     assert len(key) == 87 and key.startswith("B")  # an uncompressed P-256 point, base64url

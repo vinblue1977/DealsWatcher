@@ -148,6 +148,44 @@ describe('staying signed in (silent refresh)', () => {
     expect(assign).not.toHaveBeenCalled();
   });
 
+  it('stores the new refresh token when Cognito rotates it', async () => {
+    const auth = await freshAuth();
+    seed({ access_token: 'old', id_token: 'id', refresh_token: 'r1', expires_at: NOW - 1000 });
+    await auth.initAuth(CONFIG);
+    fetchMock.mockResolvedValue(json({ access_token: 'new', refresh_token: 'r2', expires_in: 3600 }));
+    await expect(auth.getAccessToken()).resolves.toBe('new');
+    expect(stored()).toMatchObject({ access_token: 'new', refresh_token: 'r2', id_token: 'id' });
+    fetchMock.mockClear();
+    seed({ ...stored(), expires_at: NOW - 1 });
+    fetchMock.mockResolvedValue(json({ access_token: 'newer', refresh_token: 'r3', expires_in: 3600 }));
+    await auth.getAccessToken();
+    const body = Object.fromEntries(new URLSearchParams((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as URLSearchParams));
+    expect(body.refresh_token).toBe('r2'); // the next renewal uses the rotated token, not the first one
+  });
+
+  it('adopts the tokens another tab stored instead of signing out when the sent refresh token was rotated', async () => {
+    const auth = await freshAuth();
+    seed({ access_token: 'old', refresh_token: 'r1', expires_at: NOW - 1000 });
+    await auth.initAuth(CONFIG);
+    fetchMock.mockImplementation(async () => {
+      seed({ access_token: 'tab-b', refresh_token: 'r2', expires_at: NOW + 3_600_000 }); // the other tab finished first
+      return json({ error: 'invalid_grant' }, 400);
+    });
+    await expect(auth.getAccessToken()).resolves.toBe('tab-b');
+    expect(stored()).toMatchObject({ refresh_token: 'r2' });
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('keeps the session when the token endpoint throttles (429)', async () => {
+    const auth = await freshAuth();
+    seed({ access_token: 'old', refresh_token: 'r', expires_at: NOW - 1 });
+    await auth.initAuth(CONFIG);
+    fetchMock.mockResolvedValue(json({ error: 'slow_down' }, 429));
+    await expect(auth.getAccessToken()).rejects.toMatchObject({ status: 429 });
+    expect(stored()).toMatchObject({ refresh_token: 'r' });
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   it('refreshes a token that is within a minute of expiring', async () => {
     const auth = await freshAuth();
     seed({ access_token: 'old', refresh_token: 'r', expires_at: NOW + 30_000 });
