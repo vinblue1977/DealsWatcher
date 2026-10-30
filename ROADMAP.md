@@ -29,11 +29,17 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 | Dealnews main feed | **Live** | Public RSS, robots.txt allows it, 50 latest deals |
 | Dealnews Black Friday feed | **Live** | Store-wide sales, mostly without a price; a price limit on a keyword skips them. Seasonal: if it disappears after the season it is logged, not an error |
 | blackfriday.com | Idea, on hold | robots.txt allows its sitemap (327 store ad pages under `/ads/`), but it has no feed and its terms of use have **not been read yet**. Idea: detect new `/ads/` pages by comparing sitemap copies (a store posted its ad), sitemap dates are unreliable, so diff the URL list. No prices |
-| Reddit | Not used | robots.txt disallows everything. Permitted route: the official API with your own Reddit app credentials (needs approval). **Needs you** if wanted |
+| Reddit | Skipped for now (2026-10-30) | robots.txt disallows everything. Two permitted routes, both need Reddit's approval: the official API with your own app credentials (access must be requested and approved first), or a small Devvit app installed in your own subreddit that searches the deal subreddits (`reddit.searchPosts` with `subredditName`, no key) and sends results to a new ingest route (HTTP fetch needs Reddit to approve our API hostname). Not worth it before Black Friday: a second codebase, a new public route to secure, untested cross-subreddit reads, Reddit's developer terms unread. Revisit after Black Friday if you still miss deals |
 | Slickdeals | Not used | robots.txt disallows its RSS for programs. Use Slickdeals' own Deal Alerts in their app (your account). Or ask them for permission |
 | CNET, theblackfriday.com | Not used | Ziff Davis terms prohibit crawling, scraping and aggregating without written permission |
 | Newegg | Not used | Cloudflare bot protection, no feed. Workaround for deals: the keyword "Newegg" matches Dealnews deals sold by Newegg |
 | PageCrawl.io (third-party page monitor) | Skipped by choice | Free plan: 6 pages, hourly checks. Could cover Newegg pages outside this app |
+| Brad's Deals | Not used | Terms forbid bots, spiders and scrapers |
+| Ben's Bargains | Not used | robots.txt allows crawling, but the Internet Brands terms ban spiders, scrapers and RSS feeds |
+| Dealsea | Not used | No feed, no terms page found |
+| Woot | Not used | Terms ban scraping. An official API exists (`developer.woot.com`, 1,000 requests a day, key requested through their forums); Woot deals only |
+| Hip2Save | Not used | robots.txt allows its feed, but its terms of use ban robots, spiders and "any manual process to monitor or copy" |
+| 9to5Toys | On hold | Valid public RSS feed that robots.txt allows (Best Buy and Amazon deals with prices), but no terms page could be found. Do not build on it until its terms are read |
 | Amazon | Not planned | Blocks scrapers |
 
 Rule for any new source: read its robots.txt **and** its terms of use first, identify the checker honestly, and skip it if it says no. No evasion (no disguised browsers, no rotating addresses).
