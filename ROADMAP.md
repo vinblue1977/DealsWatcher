@@ -15,6 +15,7 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 - [x] Security hardening pass (least-privilege table access, request size cap, push endpoint kept out of URLs)
 - [x] Alert topic + crash alarm on the feed checker: emails when it fails on two runs in a row (about an hour); no recovery email, and no email if it stops running at all (see Engineering backlog); the address comes from a deploy secret
 - [x] Multi-user: invite-only accounts (no sign-up page), invitation email with setup steps, `scripts/invite_user.sh` and `scripts/remove_user.py` (removes the account and all of their data), per-user isolation tested on every route. See `docs/users.md`
+- [x] Post-deploy smoke test (`scripts/smoke_test.sh`, run by the deploy job): the table is ACTIVE; the site serves the app, its security headers, its files, a deep link and a `config.json` that matches the API; every API route answers 401 without a token. Read-only, never signs in or sends a push. The script itself is tested against a local stand-in (`tests/test_smoke.py`). Not covered: that the checker ran (needs extra deploy-role permissions; see the alarm item below)
 
 ## Next
 

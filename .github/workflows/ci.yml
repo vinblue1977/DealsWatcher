@@ -290,13 +290,7 @@ jobs:
           npx --no-install cdk deploy --require-approval never --outputs-file cdk-outputs.json
       - name: Smoke test
         run: |
-          table="$(jq -er '.DealsWatcher.TableName' cdk-outputs.json)"
-          site="$(jq -er '.DealsWatcher.SiteUrl' cdk-outputs.json)"
-          api="$(jq -er '.DealsWatcher.ApiUrl' cdk-outputs.json)"
-          [ "$(aws dynamodb describe-table --table-name "$table" --query 'Table.TableStatus' --output text)" = ACTIVE ]
-          check() {
-            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --retry 3 --retry-all-errors "$2")"
-            echo "$2 -> $code (want $1)"; [ "$code" = "$1" ]
-          }
-          check 200 "$site/"
-          check 401 "$api/me/watches"  # sign-in required
+          SITE="$(jq -er '.DealsWatcher.SiteUrl' cdk-outputs.json)" \
+          API="$(jq -er '.DealsWatcher.ApiUrl' cdk-outputs.json)" \
+          TABLE="$(jq -er '.DealsWatcher.TableName' cdk-outputs.json)" \
+          scripts/smoke_test.sh
