@@ -1,6 +1,6 @@
 import { getAccessToken } from './auth';
 import type { Config } from './config';
-import type { Deal, QuietHours, Rule, RuleInput, RulePatch, Settings, Watch, WatchInput, WatchPatch } from './types';
+import type { CheckerStatus, Deal, QuietHours, Rule, RuleInput, RulePatch, Settings, Watch, WatchInput, WatchPatch } from './types';
 
 let base = '';
 
@@ -48,6 +48,7 @@ export const api = {
   editRule: (id: string, patch: RulePatch) => call<Rule>(`/me/rules/${id}`, send('PUT', patch)),
   deleteRule: (id: string) => call<{ deleted: string }>(`/me/rules/${id}`, send('DELETE')),
   deals: () => call<{ deals: Deal[] }>('/me/deals').then((r) => r.deals),
+  checker: () => call<CheckerStatus>('/me/status'),
   settings: () => call<Settings>('/me/settings'),
   // The zone goes along every time, so travelling moves the quiet hours with the phone.
   saveQuietHours: (quietHours: QuietHours | null, timeZone: string) => call<Settings>('/me/settings', send('PUT', { quietHours, timeZone })),

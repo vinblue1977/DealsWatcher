@@ -484,3 +484,25 @@ def test_inch_marks_are_fine_and_a_reworded_duplicate_is_caught() -> None:
     assert call("POST /me/rules", {"keyword": '55" OLED'})[0] == 201
     assert call("POST /me/rules", {"keyword": "TV -mount"})[0] == 201
     assert call("POST /me/rules", {"keyword": "tv  -MOUNT"}) == (400, {"error": "you already have this keyword"})
+
+
+def test_status_shows_when_the_checker_last_ran(table: Any) -> None:
+    assert call("GET /me/status")[1] == {"checkedAt": None}
+    table.put_item(
+        Item={
+            "PK": "CHECKER",
+            "SK": "STATUS",
+            "checkedAt": "2026-10-30T12:00:00+00:00",
+            "feedsRead": 8,
+            "feedsFailed": 0,
+            "feedsSkipped": 0,
+        }
+    )
+    assert call("GET /me/status")[1] == {
+        "checkedAt": "2026-10-30T12:00:00+00:00",
+        "feedsRead": 8,
+        "feedsFailed": 0,
+        "feedsSkipped": 0,
+    }
+    assert call("GET /me/status", user=OTHER)[1]["feedsRead"] == 8  # the same for everyone: it is about the checker, not a user
+    assert call("GET /me/status", user=None)[0] == 401

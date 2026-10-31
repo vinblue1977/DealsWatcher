@@ -1,3 +1,4 @@
+import { CheckerLine } from './CheckerLine';
 import { Notifications } from './Notifications';
 import { QuietHours } from './QuietHours';
 
@@ -14,6 +15,7 @@ export function Settings({ email, onSignOut, passkeyUrl }: { email: string; onSi
           <span>Signed in</span>
           <span class="muted">{email || 'your account'}</span>
         </div>
+        <CheckerLine label="Deal checker" />
         <a class="setting" href={passkeyUrl}>
           <span>Add a passkey</span>
           <span class="muted" aria-hidden="true">

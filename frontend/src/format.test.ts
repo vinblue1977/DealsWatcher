@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ago, hourLabel, initials, money, parseMaxPrice, parseName, parsePrice, retailerFor, ruleLine, safeLink, summary, targetMoney, visibleWatches, watchState } from './format';
+import { ago, checkerLine, hourLabel, initials, money, parseMaxPrice, parseName, parsePrice, retailerFor, ruleLine, safeLink, summary, targetMoney, visibleWatches, watchState } from './format';
 import type { Rule, Watch } from './types';
 
 const watch = (over: Partial<Watch> = {}): Watch => ({
@@ -150,5 +150,23 @@ describe('hourLabel', () => {
     [23, '11 PM'],
   ])('%i is %s', (hour, label) => {
     expect(hourLabel(hour)).toBe(label);
+  });
+});
+
+describe('checkerLine', () => {
+  const now = Date.parse('2026-10-30T12:00:00Z');
+  const at = (minutes: number) => new Date(now - minutes * 60000).toISOString();
+  it('says when the feeds were last read', () => {
+    expect(checkerLine({ checkedAt: at(12), feedsRead: 8, feedsFailed: 0, feedsSkipped: 0 }, now)).toEqual({ text: 'Checked 12 min ago', stale: false });
+  });
+  it('counts feeds that did not answer', () => {
+    expect(checkerLine({ checkedAt: at(3), feedsRead: 6, feedsFailed: 1, feedsSkipped: 1 }, now).text).toBe('Checked 3 min ago · 6 of 8 feeds');
+  });
+  it('warns after three missed runs', () => {
+    expect(checkerLine({ checkedAt: at(90), feedsRead: 8 }, now).stale).toBe(false);
+    expect(checkerLine({ checkedAt: at(180), feedsRead: 8 }, now)).toEqual({ text: 'Last checked 3 h ago, new deals may be delayed', stale: true });
+  });
+  it.each([[null], ['not a date']])('handles no usable time (%s)', (checkedAt) => {
+    expect(checkerLine({ checkedAt }, now)).toEqual({ text: 'Not checked yet', stale: false });
   });
 });

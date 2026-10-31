@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
 
-from feeds import dealnews
+from feeds import dealnews, status
 from feeds.matching import matches
 from push.notify import notify
 
@@ -29,8 +29,9 @@ MAX_PUSHES = 5  # per user per run; deals over the cap stay unsent and go out on
 MAX_HELD_HOURS = 24  # an alert held back (quiet hours, the cap, a failed push) is dropped once its deal is this old
 
 
-def _read_feeds() -> tuple[list[dict[str, Any]], list[str]]:
-    """Deals from every feed, newest first, each deal once (one in several feeds counts once), and the required feeds that failed.
+def _read_feeds() -> tuple[list[dict[str, Any]], list[str], tuple[int, int, int]]:
+    """Deals from every feed, newest first, each deal once (one in several feeds counts once), the required feeds that failed, and
+    how many feeds were read, failed and skipped.
 
     The feeds are read a few at a time (MAX_WORKERS), and each request starts at least START_GAP_SECONDS after the one before,
     so Dealnews sees a few small requests, not a burst. One feed being down must not hide the others' deals. If every feed
@@ -82,7 +83,8 @@ def _read_feeds() -> tuple[list[dict[str, Any]], list[str]]:
     )  # counts only: no keywords, titles or addresses
     if len(down) == len(dealnews.FEEDS) and first_error is not None:
         raise first_error
-    return sorted(deals.values(), key=lambda d: d["published"], reverse=True), [u for u in down if u in dealnews.REQUIRED]
+    required_down = [u for u in down if u in dealnews.REQUIRED]
+    return sorted(deals.values(), key=lambda d: d["published"], reverse=True), required_down, (read_count, len(down), skipped)
 
 
 def _rules_by_user(table: Any) -> dict[str, list[dict[str, Any]]]:
@@ -103,6 +105,26 @@ def _rules_by_user(table: Any) -> dict[str, list[dict[str, Any]]]:
     for rules in found.values():
         rules.sort(key=lambda r: (str(r.get("createdAt", "")), r["keyword"].casefold()))
     return found
+
+
+def _record_status(table: Any, now: datetime, counts: tuple[int, int, int]) -> None:
+    """Remembers when the feeds were last read, for the app's "Checked 12 min ago" line. One shared item (not a user's data).
+
+    Best effort: failing to write it must never stop the alerts.
+    """
+    read, failed, skipped = counts
+    try:
+        table.put_item(
+            Item={
+                **status.KEY,
+                "checkedAt": now.isoformat(),
+                "feedsRead": read,
+                "feedsFailed": failed,
+                "feedsSkipped": skipped,
+            }
+        )
+    except Exception:
+        log.exception("checker status could not be saved")
 
 
 def _is_quiet(table: Any, user: str, now: datetime) -> bool:
@@ -177,7 +199,9 @@ def _claim(table: Any, user: str, deal: dict[str, Any], rule: dict[str, Any], no
 def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
     table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])  # pyright: ignore[reportAttributeAccessIssue]
     now = datetime.now(UTC)
-    found, feeds_down = _read_feeds()
+    found, feeds_down, counts = _read_feeds()
+    if not feeds_down:  # with the main feed down the line must go stale, not say "checked"
+        _record_status(table, datetime.now(UTC), counts)  # the time the feeds were read, even if an alert fails later
     deals = dealnews.age_limit(now, found, MAX_AGE_HOURS)
     saved = pushed = failed = matched = already_sent = 0
     for user, rules in _rules_by_user(table).items():

@@ -843,3 +843,72 @@ class TestConcurrentReads:
         monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
         feeds.handler({}, None)
         assert deals_of(table)[0]["price"] == Decimal("499.00") and len(pushes) == 1
+
+
+class TestCheckerStatus:
+    def status(self, table: Any) -> dict[str, Any]:
+        return table.get_item(Key={"PK": "CHECKER", "SK": "STATUS"})["Item"]
+
+    def test_each_run_records_when_the_feeds_were_read_and_how_many_answered(
+        self, table: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        run(monkeypatch)
+        assert self.status(table) == {
+            "PK": "CHECKER",
+            "SK": "STATUS",
+            "checkedAt": NOW.isoformat(),
+            "feedsRead": len(dealnews.FEEDS),
+            "feedsFailed": 0,
+            "feedsSkipped": 0,
+        }
+
+    def test_a_feed_that_failed_is_counted(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        bodies = {url: feed() for url in dealnews.FEEDS}
+
+        def fetch(url: str) -> bytes:
+            if url == dealnews.BLACK_FRIDAY_FEED:
+                raise OSError("gone")
+            return bodies[url]
+
+        monkeypatch.setattr(feeds.dealnews, "fetch", fetch)
+        monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
+        feeds.handler({}, None)
+        assert (self.status(table)["feedsRead"], self.status(table)["feedsFailed"]) == (len(dealnews.FEEDS) - 1, 1)
+
+    def test_nothing_is_recorded_when_the_main_feed_is_down(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        bodies = {url: feed() for url in dealnews.FEEDS}
+
+        def fetch(url: str) -> bytes:
+            if url == dealnews.MAIN_FEED:
+                raise OSError("down")
+            return bodies[url]
+
+        monkeypatch.setattr(feeds.dealnews, "fetch", fetch)
+        monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
+        with pytest.raises(RuntimeError):
+            feeds.handler({}, None)
+        assert "Item" not in table.get_item(Key={"PK": "CHECKER", "SK": "STATUS"})  # the line goes stale instead
+
+    def test_nothing_is_recorded_when_every_feed_fails(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        def fetch(url: str) -> bytes:
+            raise OSError("down")
+
+        monkeypatch.setattr(feeds.dealnews, "fetch", fetch)
+        with pytest.raises(OSError):
+            feeds.handler({}, None)
+        assert "Item" not in table.get_item(Key={"PK": "CHECKER", "SK": "STATUS"})  # the app keeps showing the last good check
+
+    def test_a_status_that_cannot_be_saved_does_not_stop_the_alerts(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="OLED")
+        real_put = table.put_item
+
+        def put(**kwargs: Any) -> Any:
+            if kwargs["Item"]["PK"] == "CHECKER":
+                raise RuntimeError("throttled")
+            return real_put(**kwargs)
+
+        monkeypatch.setattr(table, "put_item", put)
+        monkeypatch.setattr(feeds.boto3, "resource", lambda *_a, **_k: type("R", (), {"Table": lambda self, name: table})())
+        assert run(monkeypatch, item("1"))["pushed"] == 1

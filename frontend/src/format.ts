@@ -1,4 +1,4 @@
-import type { Rule, Source, Watch } from './types';
+import type { CheckerStatus, Rule, Source, Watch } from './types';
 
 export type Tone = 'good' | 'warn' | 'muted';
 
@@ -135,4 +135,18 @@ export function visibleWatches(watches: Watch[], filter: WatchFilter): Watch[] {
 /** An hour of the day (0-23) as the mockups show it: "10 PM", "12 AM". */
 export function hourLabel(hour: number): string {
   return `${hour % 12 || 12} ${hour < 12 ? 'AM' : 'PM'}`;
+}
+
+const STALE_MINUTES = 90; // three missed runs of the checker's 30-minute schedule (infra/feeds.py: change both together)
+
+/** The "last checked" line: when the feeds were last read, how many answered, and whether it has gone quiet for too long. */
+export function checkerLine(status: CheckerStatus, now = Date.now()): { text: string; stale: boolean } {
+  const iso = status.checkedAt;
+  const at = iso ? Date.parse(iso) : NaN;
+  if (!iso || Number.isNaN(at)) return { text: 'Not checked yet', stale: false };
+  const stale = now - at > STALE_MINUTES * 60000;
+  const read = status.feedsRead ?? 0;
+  const total = read + (status.feedsFailed ?? 0) + (status.feedsSkipped ?? 0);
+  const feeds = total > read ? ` · ${read} of ${total} feeds` : '';
+  return { text: stale ? `Last checked ${ago(iso, now)}, new deals may be delayed` : `Checked ${ago(iso, now)}${feeds}`, stale };
 }

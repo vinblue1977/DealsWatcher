@@ -180,3 +180,5 @@ input.text { height: 48px; padding: 0 14px; border-radius: 12px; border: 1px sol
 .notify-title { font-size: 16px; font-weight: 600; }
 .card-body .error, .card-body .muted { margin: 0; }
 .hint { margin: 0; }
+.warn-text { color: var(--warn); }
+.right { text-align: right; }

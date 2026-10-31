@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from './api';
+import { CheckerLine } from './CheckerLine';
 import { ago, money, safeLink, sourceName } from './format';
 import type { Deal, Source } from './types';
 
@@ -63,6 +64,7 @@ export function Deals() {
       <header>
         <h1>Deals</h1>
         <div class="muted">{keywords === null ? ' ' : `Matches for your ${keywords} active ${keywords === 1 ? 'keyword' : 'keywords'}`}</div>
+        <CheckerLine />
       </header>
 
       {error && (

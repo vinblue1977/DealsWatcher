@@ -28,7 +28,7 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 1. [x] Quiet hours (see App polish)
 2. [ ] Digest instead of one push per deal, or a higher per-run cap: broad keywords will flood the 5-per-run cap (see App polish)
 3. [ ] Alarm for the checker not running at all, and a metric or alarm for a dead extra feed (see Engineering backlog)
-4. [ ] "Last checked" line in Settings or Deals ("Checked 12 min ago, 8 feeds OK"): the run summary logged since #32 already has the data; store it on a small item the app can read
+4. [x] "Last checked" line (Deals and Settings): each run saves one shared `CHECKER`/`STATUS` item (time, feeds read, failed, skipped); the app shows "Checked 12 min ago", adds "6 of 8 feeds" when some did not answer, and turns amber with "new deals may be delayed" after 90 minutes. Nothing is saved when the main feed is down or every feed fails, so the line goes stale instead of lying; the line refreshes every 5 minutes and when the app comes back to the front
 5. [x] Better keyword syntax: `-word` exclusions and `"exact phrases"`, so a broad keyword like "TV" is less noisy (see App polish)
 6. [x] Fetch feeds concurrently (see Engineering backlog)
 7. [x] Post-deploy smoke test (see Done)
@@ -77,7 +77,7 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 - [x] Keyword syntax: `TV -mount -"wall mount"` skips deals with those words (the store and category count too); `"Pro Max" case` needs each quoted phrase anywhere and the plain words as one phrase in order; a plain keyword works as before. A `-` only excludes before a letter (`-15`, `-5%` stay plain text) and a quote only opens a phrase at the start of a word (`55" OLED` stays plain text). Two keywords that mean the same (case, spacing, quote style, term order) count as duplicates. Curly quotes from the phone keyboard are accepted. New keywords that cannot be read (only exclusions, an unclosed quote) are refused. The Keywords screen shows a one-line hint. Not done: OR between words
 - [ ] Deals without a price: a keyword with a price limit skips them today. Option per keyword to include them marked "no price", or to read a price from the title ("$199") when the feed has none
 - [ ] "Not interested" on a deal in the Deals list, which could suggest an exclusion for that keyword
-- [ ] "Last checked" line (Black Friday plan, item 4)
+- [x] "Last checked" line (Black Friday plan, item 4)
 - [ ] Watches whose store has no checker show "Waiting for first check" forever: hide or relabel them ("Not checked yet, store prices are not read") until a store checker exists, so the app does not look broken to invited people
 - [ ] More users (items are keyed per user; checks would be shared per product link)
 
