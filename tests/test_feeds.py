@@ -59,10 +59,10 @@ class TestParse:
     def test_prices_are_optional_and_must_look_like_prices(self) -> None:
         deals = dealnews.parse(
             feed(
-                item("1", price=None),
-                item("2", price="free"),
-                item("3", price="0"),
-                item("4", price="-5"),
+                item("1", price=None, title="LG C5 OLED TV"),
+                item("2", price="free", title="LG C5 OLED TV"),
+                item("3", price="0", title="LG C5 OLED TV"),
+                item("4", price="-5", title="LG C5 OLED TV"),
                 item("5", price="199.2"),
             )
         )
@@ -826,8 +826,8 @@ class TestConcurrentReads:
     ) -> None:
         add_rule(table, keyword="OLED")
         bodies = {url: feed() for url in dealnews.FEEDS} | {
-            dealnews.MAIN_FEED: feed(item("1", price=None)),  # the main feed lists it without a price...
-            dealnews.ELECTRONICS_FEED: feed(item("1", price="499.00")),  # ...the Electronics feed with one
+            dealnews.MAIN_FEED: feed(item("1", price=None, title="LG C5 OLED TV")),  # the main feed lists it without a price...
+            dealnews.ELECTRONICS_FEED: feed(item("1", price="499.00", title="LG C5 OLED TV")),  # ...the Electronics feed with one
         }
         electronics_done = threading.Event()
 
@@ -912,3 +912,67 @@ class TestCheckerStatus:
         monkeypatch.setattr(table, "put_item", put)
         monkeypatch.setattr(feeds.boto3, "resource", lambda *_a, **_k: type("R", (), {"Table": lambda self, name: table})())
         assert run(monkeypatch, item("1"))["pushed"] == 1
+
+
+class TestTitlePrice:
+    @pytest.mark.parametrize(
+        ("title", "price"),
+        [
+            ("Apple AirPods Pro 3 for $199", "199"),
+            ("LG C5 OLED TV for $1,099.99 + free shipping", "1099.99"),
+            ("$199 Apple AirPods Pro 3", "199"),
+            ("Dyson V15 from $449 at Amazon", "449"),
+            ("Save $50 on a Dyson V15 for $349", "349"),  # "save $50" is a discount, not the price
+            ("Now $199, was $199", "199"),  # the same amount twice is still one price
+            ("Sony headphones, only $79, ships free", "79"),  # a comma after the amount
+            ("Free $25 gift card with $200 purchase", None),  # nothing here is the price of a thing
+            ("Samsung TV $599, was $799", None),  # two prices: not guessed
+            ("Dyson V15 for $349 or $29/mo", "349"),  # a monthly payment is not the price
+            ("$20 off a Dyson V15", None),
+            ("$35+ orders ship free", None),
+            ("Free shipping on orders over $50", None),
+            ("Up to 70% off at Macy's", None),
+            ("Kohl's Cash: $10 for every $50", None),  # two amounts, neither clearly the price
+            ("Soap for $0", None),
+            ("$0 shipping on a TV for $199", "199"),  # a free extra is not a second price
+            ("AirPods Pro 3 drop to $199", "199"),  # "drops to" is the price
+            ("Echo from $299 to $199", None),  # old and new price: not guessed
+            ("Galaxy S25 plus a free $100 Best Buy gift card", None),  # a brand between the amount and "gift card"
+            ("Free $25 Amazon gift card", None),
+            ("Bose headphones, $50 coupons", None),
+            ("Dyson V15, $150 discount", None),
+            ("TV for $199 + $5.99 shipping", "199"),
+            ("Game bundle $5 shipping", None),
+            ("Laptop $1.99k", None),
+            ("Laptop $2k", None),
+            ("Prize pool $1.5 million", None),
+            ("TV $199 Back in stock", "199"),  # "back" alone is not cash back
+            ("$199 Off-White sneakers", "199"),  # "off-white" is a colour, not "$199 off"
+            ("Phone Cover $12", "12"),  # words that merely end in "over", "get" or "min"
+            ("Widget $9 and Vitamin $9", "9"),
+            ("Prices from $1234567", None),  # not a plausible price
+            ("A deal without a dollar sign, 199 only", None),
+        ],
+    )
+    def test_a_price_is_read_only_when_the_title_names_exactly_one(self, title: str, price: str | None) -> None:
+        assert dealnews._title_price(title) == (Decimal(price) if price else None)
+
+    def test_the_feeds_own_price_wins_and_a_title_price_fills_a_gap(self) -> None:
+        deals = dealnews.parse(feed(item("1", price="1099.00", title="TV for $999"), item("2", price=None, title="TV for $999")))
+        assert [d["price"] for d in deals] == [Decimal("1099.00"), Decimal("999")]
+
+    def test_a_later_feeds_own_price_replaces_a_guess_from_the_title(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="OLED")
+        bodies = {url: feed() for url in dealnews.FEEDS} | {
+            dealnews.MAIN_FEED: feed(item("1", price=None, title="LG C5 OLED TV for $999")),  # a guess: $999
+            dealnews.ELECTRONICS_FEED: feed(item("1", price="1099.00", title="LG C5 OLED TV for $999")),  # the feed's own price
+        }
+        monkeypatch.setattr(feeds.dealnews, "fetch", lambda url: bodies[url])
+        monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
+        feeds.handler({}, None)
+        assert deals_of(table)[0]["price"] == Decimal("1099.00")
+
+    def test_a_title_price_lets_a_priced_keyword_match_and_a_wrong_ceiling_not(self) -> None:
+        deal = dealnews.parse(feed(item("1", price=None, title="Apple AirPods Pro 3 for $199")))[0]
+        assert matches(rule(maxPrice=Decimal("250")), deal, "dealnews")
+        assert not matches(rule(maxPrice=Decimal("150")), deal, "dealnews")

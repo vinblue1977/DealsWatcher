@@ -77,6 +77,8 @@ def _read_feeds() -> tuple[list[dict[str, Any]], list[str], tuple[int, int, int]
             for field in ("price", "retailer", "category"):  # a copy without a price must not hide a priced one
                 if kept[field] is None and deal[field] is not None:
                     kept[field] = deal[field]
+            if kept["price_from_title"] and not deal["price_from_title"]:  # a feed's own price beats a guess from a title
+                kept["price"], kept["price_from_title"] = deal["price"], False
         read_count += 1
     log.info(
         "feeds: %d read, %d failed, %d skipped", read_count, len(down), skipped
