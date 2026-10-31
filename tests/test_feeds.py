@@ -15,6 +15,7 @@ from moto import mock_aws
 
 from feeds import dealnews
 from feeds import handler as feeds
+from feeds import matching as feeds_matching
 from feeds.matching import matches
 from push import notify as push
 
@@ -711,3 +712,81 @@ class TestQuietHours:
         )
         self.profile(table, 22, 7)
         assert run(monkeypatch)["pushed"] == 0 and pushes == []
+
+
+class TestKeywordSyntax:
+    TV = {
+        "title": "LG 65 inch OLED TV with wall mount for $999",
+        "price": Decimal("999"),
+        "retailer": "Best Buy",
+        "category": "TVs",
+    }
+
+    @pytest.mark.parametrize(
+        ("keyword", "expected"),
+        [
+            ("TV", True),
+            ("TV -mount", False),  # excluded word appears (also as "mounts": same plural rule)
+            ("TV -soundbar", True),
+            ("TV -MOUNT", False),  # case does not matter
+            ("TV -Best", False),  # exclusions look at the store and category too, like everything else
+            ("TV -Bestow", True),  # whole words only
+            ('TV -"wall mount"', False),
+            ('TV -"wall bracket"', True),
+            ('"65 inch" oled', True),  # quoted phrase and the plain words are all required, in any order
+            ('"65 inch" "4k"', False),  # every quoted phrase is required
+            ('"oled tv"', True),
+            ('"tv oled"', False),  # a quoted phrase keeps its word order
+            ("OLED TV", True),
+            ("TV OLED", False),  # plain words are one phrase in order, as before
+            ("“65 inch” OLED", True),  # a phone's curly quotes work as straight ones
+            ("-mount", False),  # nothing to look for: reads as one plain phrase, which isn't in the deal
+            ('"unclosed', False),  # unreadable keywords fall back to one plain phrase too
+        ],
+    )
+    def test_what_a_keyword_asks_for(self, keyword: str, expected: bool) -> None:
+        assert matches(rule(keyword=keyword), self.TV, "dealnews") is expected
+
+    def test_a_keyword_saved_before_the_syntax_still_matches_as_one_phrase(self) -> None:
+        deal = {**DEAL, "title": "Save -5% off today"}
+        assert matches(rule(keyword="-5% off"), deal, "dealnews")  # a dash before a digit is plain text
+        assert matches(rule(keyword="iPhone -15"), {**DEAL, "title": "Case for iPhone -15 users"}, "dealnews")
+        assert matches(rule(keyword='55" OLED'), {**DEAL, "title": 'LG 55" OLED TV'}, "dealnews")  # an inch mark is plain text
+        assert matches(
+            rule(keyword="-mount"), {**DEAL, "title": "A -mount lens"}, "dealnews"
+        )  # exclusions only: one plain phrase
+
+    @pytest.mark.parametrize(
+        ("keyword", "terms"),
+        [
+            ("OLED", (["oled"], [])),
+            ('TV -mount -"wall mount"', (["tv"], ["mount", "wall mount"])),
+            ('"Pro  Max"  case', (["case", "pro max"], [])),
+            ("T-Shirt", (["t-shirt"], [])),  # a dash inside a word is part of it
+            ("-", (["-"], [])),
+            ("TV --mount", (["tv --mount"], [])),  # only -letter marks an exclusion
+            ('55" OLED', (['55" oled'], [])),
+            ('a"b"', (['a"b"'], [])),
+        ],
+    )
+    def test_parsing(self, keyword: str, terms: tuple) -> None:
+        parsed = feeds_matching.parse_keyword(keyword)
+        assert parsed is not None and (sorted(parsed.wanted), list(parsed.unwanted)) == (sorted(terms[0]), terms[1])
+
+    @pytest.mark.parametrize(
+        ("a", "b", "same"),
+        [
+            ("TV -mount", "tv  -MOUNT", True),
+            ("“Pro Max”", '"pro max"', True),
+            ("TV -a -b", "TV -b -a", True),
+            ("TV -mount", "TV", False),
+            ("OLED TV", "TV OLED", False),  # plain words keep their order
+            ("-mount", " -Mount ", True),  # unreadable ones compare as plain text
+        ],
+    )
+    def test_same_keyword(self, a: str, b: str, same: bool) -> None:
+        assert feeds_matching.same_keyword(a, b) is same
+
+    @pytest.mark.parametrize("keyword", ["-mount", '""', '"unclosed', 'say "hi', '-"wall mount"', '-"open', "", "   "])
+    def test_unreadable_keywords(self, keyword: str) -> None:
+        assert feeds_matching.parse_keyword(keyword) is None

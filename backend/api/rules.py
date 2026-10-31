@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from api.http import json_response, parse_object, price, query_items, update_item, view
+from feeds.matching import parse_keyword, same_keyword
 
 MAX_RULES = 50
 RULE_ID = re.compile(r"^[0-9a-f]{12}$")
@@ -19,6 +20,8 @@ def _fields(data: dict[str, Any], partial: bool) -> tuple[dict[str, Any], str | 
         keyword = data.get("keyword")
         if not isinstance(keyword, str) or not 0 < len(keyword.strip()) <= 60:
             return {}, "keyword must be 1-60 characters"
+        if parse_keyword(keyword) is None:
+            return {}, 'keyword needs a word to look for (a word after - is skipped, e.g. TV -mount) and any "phrase" closed'
         out["keyword"] = keyword.strip()
     if "maxPrice" in data:
         if data["maxPrice"] is None:
@@ -41,7 +44,7 @@ def _fields(data: dict[str, Any], partial: bool) -> tuple[dict[str, Any], str | 
 
 
 def _has_keyword(rules: list[dict[str, Any]], keyword: str, except_id: str = "") -> bool:
-    return any(r["id"] != except_id and r["keyword"].casefold() == keyword.casefold() for r in rules)
+    return any(r["id"] != except_id and same_keyword(r["keyword"], keyword) for r in rules)
 
 
 def route(table: Any, user: str, route: str, rule_id: str, body: str | None) -> dict[str, Any]:

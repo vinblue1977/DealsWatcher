@@ -123,13 +123,16 @@ export function Keywords() {
           New keyword
         </label>
         <div class="row">
-          <input id="kw" class="text grow-row" autoComplete="off" autoCapitalize="off" maxLength={60} placeholder="Add a keyword, e.g. OLED" value={word} onInput={typing(setWord)} />
+          <input id="kw" class="text grow-row" autoComplete="off" autoCapitalize="off" autoCorrect="off" spellcheck={false} maxLength={60} placeholder="Add a keyword, e.g. OLED" value={word} onInput={typing(setWord)} />
           <button class="fab square" type="submit" aria-label="Add keyword" disabled={busy || rules === null || !word.trim()}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
               <path d="M12 5v14M5 12h14" />
             </svg>
           </button>
         </div>
+        <p class="muted small hint">
+          Skip deals with a word: TV -mount. Need an exact phrase: “Pro Max”.
+        </p>
         <label class="sr" for="kwmax">
           Highest price (optional)
         </label>

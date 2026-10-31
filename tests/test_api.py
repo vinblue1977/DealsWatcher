@@ -175,6 +175,9 @@ def test_keyword_rules_crud() -> None:
         {"keyword": "ok", "sources": ["amazon"]},
         {"keyword": "ok", "sources": ["reddit"]},  # not read by the checker: refused instead of silently never firing
         {"keyword": "ok", "enabled": "yes"},
+        {"keyword": "-mount"},  # only exclusions: nothing to look for
+        {"keyword": '"Pro Max'},  # a quote never closed
+        {"keyword": '""'},
     ],
 )
 def test_rules_reject_bad_input(body: dict) -> None:
@@ -468,3 +471,16 @@ def test_bad_quiet_hours_are_rejected(bad: Any) -> None:
 
 def test_settings_need_a_signed_in_user() -> None:
     assert call("GET /me/settings", user=None)[0] == 401
+
+
+def test_keywords_may_use_exclusions_and_quoted_phrases() -> None:
+    status, rule = call("POST /me/rules", {"keyword": ' TV -mount -"wall mount" '})
+    assert status == 201 and rule["keyword"] == 'TV -mount -"wall mount"'
+    assert call("PUT /me/rules/{id}", {"keyword": '"Pro Max" -case'}, item_id=rule["id"])[0] == 200
+    assert call("PUT /me/rules/{id}", {"keyword": "-case"}, item_id=rule["id"])[0] == 400
+
+
+def test_inch_marks_are_fine_and_a_reworded_duplicate_is_caught() -> None:
+    assert call("POST /me/rules", {"keyword": '55" OLED'})[0] == 201
+    assert call("POST /me/rules", {"keyword": "TV -mount"})[0] == 201
+    assert call("POST /me/rules", {"keyword": "tv  -MOUNT"}) == (400, {"error": "you already have this keyword"})
