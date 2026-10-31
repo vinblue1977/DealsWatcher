@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ago, checkerLine, hourLabel, initials, money, parseMaxPrice, parseName, parsePrice, retailerFor, ruleLine, safeLink, summary, targetMoney, visibleWatches, watchState } from './format';
+import { STORE_PRICES_CHECKED, ago, checkerLine, hourLabel, initials, money, parseMaxPrice, parseName, parsePrice, retailerFor, ruleLine, safeLink, summary, targetMoney, visibleWatches, watchState } from './format';
 import type { Rule, Watch } from './types';
 
 const watch = (over: Partial<Watch> = {}): Watch => ({
@@ -76,7 +76,7 @@ describe('watchState', () => {
   it('covers each situation', () => {
     expect(watchState(watch({ paused: true }))).toMatchObject({ label: 'Paused', tone: 'muted' });
     expect(watchState(watch({ status: 'blocked' }))).toMatchObject({ blocked: true, tone: 'warn' });
-    expect(watchState(watch({ status: 'pending' }))).toMatchObject({ label: 'Waiting for first check' });
+    expect(watchState(watch({ status: 'pending' }))).toMatchObject({ label: STORE_PRICES_CHECKED ? 'Waiting for first check' : 'Prices not read yet' });
     expect(watchState(watch({ lastPrice: 199 }))).toMatchObject({ label: 'At target', atTarget: true, tone: 'good' });
     expect(watchState(watch({ lastPrice: 229 }))).toMatchObject({ label: '$30 above target', atTarget: false });
     expect(watchState(watch({ lastPrice: 229.99, targetPrice: 199.99 })).label).toBe('$30 above target'); // no float noise
@@ -168,5 +168,22 @@ describe('checkerLine', () => {
   });
   it.each([[null], ['not a date']])('handles no usable time (%s)', (checkedAt) => {
     expect(checkerLine({ checkedAt }, now)).toEqual({ text: 'Not checked yet', stale: false });
+  });
+});
+
+describe('watches while no store checker exists', () => {
+  const pending = watch({ status: 'pending' });
+  it('does not promise a first check, and says so', () => {
+    expect(watchState(pending, false)).toMatchObject({ label: 'Prices not read yet', tone: 'muted', noChecker: true });
+  });
+  it('waits for the first check once a checker exists', () => {
+    expect(watchState(pending, true)).toMatchObject({ label: 'Waiting for first check', noChecker: false });
+  });
+  it('leaves paused, blocked and priced watches alone', () => {
+    for (const checked of [false, true]) {
+      expect(watchState(watch({ paused: true }), checked)).toMatchObject({ label: 'Paused', noChecker: false });
+      expect(watchState(watch({ status: 'blocked' }), checked)).toMatchObject({ blocked: true, noChecker: false });
+      expect(watchState(watch({ lastPrice: 199 }), checked)).toMatchObject({ label: 'At target', noChecker: false });
+    }
   });
 });

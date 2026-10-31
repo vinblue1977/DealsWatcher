@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api, ApiError } from './api';
-import { ago, money, parseName, parsePrice, retailerFor, targetMoney, watchState } from './format';
+import { NO_CHECKER_NOTE, STORE_PRICES_CHECKED, ago, money, parseName, parsePrice, retailerFor, targetMoney, watchState } from './format';
 import { Switch } from './Switch';
 import { go } from './router';
 import type { Watch, WatchPatch } from './types';
@@ -127,6 +127,7 @@ export function Detail({ id }: { id: string }) {
         <div class={watch.lastPrice === undefined ? 'big faint' : 'big'}>{watch.lastPrice === undefined ? '—' : money(watch.lastPrice)}</div>
         <span class={`pill ${state.tone}`}>{state.label}</span>
       </div>
+      {state.noChecker && <p class="muted small">{NO_CHECKER_NOTE}</p>}
 
       {watch.lowestPrice !== undefined && (
         <div class="stats">
@@ -164,7 +165,7 @@ export function Detail({ id }: { id: string }) {
 
       <div class="group">
         <Switch on={watch.alertOnDrop} label="Also alert on drops of 10% or more" disabled={busy} onChange={(on) => change({ alertOnDrop: on })} />
-        <Switch on={!watch.paused} label="Checking this product" disabled={busy} onChange={(on) => change({ paused: !on })} />
+        {(STORE_PRICES_CHECKED || watch.paused) && <Switch on={!watch.paused} label="Checking this product" disabled={busy} onChange={(on) => change({ paused: !on })} />}
       </div>
 
       {error && (

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from './api';
-import { initials, money, summary, targetMoney, visibleWatches, watchState, type WatchFilter } from './format';
+import { NO_CHECKER_EMPTY, NO_CHECKER_NOTE, STORE_PRICES_CHECKED, initials, money, summary, targetMoney, visibleWatches, watchState, type WatchFilter } from './format';
 import type { Watch } from './types';
 
 function Card({ watch }: { watch: Watch }) {
@@ -84,12 +84,15 @@ export function Watching() {
       {watches && watches.length === 0 && (
         <section class="empty">
           <p>Nothing watched yet.</p>
-          <p class="muted">Add a product link and you'll get a push notification when its price drops.</p>
+          <p class="muted">
+            {STORE_PRICES_CHECKED ? "Add a product link and you'll get a push notification when its price drops." : NO_CHECKER_EMPTY}
+          </p>
           <a class="button primary" href="#/add">
             Add your first watch
           </a>
         </section>
       )}
+      {watches?.some((w) => watchState(w).noChecker) && <p class="muted small">{NO_CHECKER_NOTE}</p>}
       {watches && watches.length > 0 && shown.length === 0 && <p class="muted center">Nothing matches this filter.</p>}
       <ul class="list">
         {shown.map((w) => (
