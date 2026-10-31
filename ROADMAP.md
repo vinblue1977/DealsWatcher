@@ -23,6 +23,16 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 2. [x] Refresh-token rotation: every renewal issues a new refresh token (60 s grace for retries), so the session runs a year from the last renewal; a refresh whose response is lost, or an old token reused after 60 s, still needs a fresh sign-in
 3. [ ] Phase 7: Black Friday polish (see App polish below); Black Friday 2026 is Nov 27
 
+### Black Friday plan (Nov 27), in this order
+
+1. [x] Quiet hours (see App polish)
+2. [ ] Digest instead of one push per deal, or a higher per-run cap: broad keywords will flood the 5-per-run cap (see App polish)
+3. [ ] Alarm for the checker not running at all, and a metric or alarm for a dead extra feed (see Engineering backlog)
+4. [ ] "Last checked" line in Settings or Deals ("Checked 12 min ago, 8 feeds OK"): the run summary logged since #32 already has the data; store it on a small item the app can read
+5. [ ] Better keyword syntax (in progress): `-word` exclusions and `"exact phrases"`, so a broad keyword like "TV" is less noisy
+6. [ ] Fetch feeds concurrently (in progress; see Engineering backlog)
+7. [x] Post-deploy smoke test (see Done)
+
 ## Sources and feeds
 
 | Source | Status | Notes |
@@ -63,7 +73,12 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 - [x] Rename a watch on the Detail screen (Name field above the price limit)
 - [x] Edit a keyword's highest price in the Keywords screen. Choosing feeds per keyword is not offered: Dealnews is the only live feed, so there is nothing to choose yet
 - [ ] Price-history chart on Detail (needs checker data)
-- [ ] Optional digest instead of one push per deal
+- [ ] Optional digest instead of one push per deal (Black Friday plan, item 2)
+- [ ] Keyword syntax: `-word` and `-"two words"` exclude a deal, `"exact phrase"` terms must each appear; plain keywords keep working as they do now. The Add/Edit keyword screen shows a one-line hint
+- [ ] Deals without a price: a keyword with a price limit skips them today. Option per keyword to include them marked "no price", or to read a price from the title ("$199") when the feed has none
+- [ ] "Not interested" on a deal in the Deals list, which could suggest an exclusion for that keyword
+- [ ] "Last checked" line (Black Friday plan, item 4)
+- [ ] Watches whose store has no checker show "Waiting for first check" forever: hide or relabel them ("Not checked yet, store prices are not read") until a store checker exists, so the app does not look broken to invited people
 - [ ] More users (items are keyed per user; checks would be shared per product link)
 
 ## Engineering backlog (from code reviews)
@@ -72,10 +87,11 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 - [ ] `notify` re-queries a user's devices per deal (at most 5 per run): fetch once per user
 - [ ] Share the "load / retry" notice and fetch pattern across screens (repeated in five places)
 - [ ] Rendering tests for the screens (needs a DOM test setup and a new dev dependency; the logic is covered by pure-function tests)
-- [ ] Fetch feeds concurrently if more are added (today one after another with a 1 s pause)
+- [ ] Fetch feeds concurrently (today one after another with a 1 s pause; in progress). Keep it polite: a small worker limit, not all eight at once
 - [ ] A dead or renumbered extra Dealnews feed (a changed category id, say) is only logged, so nothing alerts you; add a metric or alarm if coverage matters (an alarm costs ~$0.10/month past the free 10)
 - [ ] A broad keyword (like "TV") on the first run after new feeds can match many deals, but only 5 pushes go out per user per run and deals older than 6 hours are dropped; raise the cap or add a digest if that bites
-- [ ] An alarm for the checker not running at all (no invocations for hours): a second alarm, ~$0.10/month once past the free 10
+- [ ] An alarm for the checker not running at all (no invocations for hours): a second alarm, ~$0.10/month once past the free 10. Do this one before Black Friday
+- [ ] Extend the smoke test to prove the checker ran recently (the deploy role needs permission to read the checker's logs or metrics; best done with the alarm above)
 - [ ] Alerts left unsent (quiet hours, the 5-per-run cap, a failed push) are retried until their deal is 24 hours old
 - [ ] Duplicate keyword check is read-then-write: two simultaneous adds can slip past (strict fix needs a different key design)
 - [ ] Older keyword rules may still list Reddit or Slickdeals as sources (harmless, hidden in the UI); migrate if it ever matters
