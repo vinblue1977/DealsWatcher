@@ -29,7 +29,7 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 2. [ ] Digest instead of one push per deal, or a higher per-run cap: broad keywords will flood the 5-per-run cap (see App polish)
 3. [ ] Alarm for the checker not running at all, and a metric or alarm for a dead extra feed (see Engineering backlog)
 4. [ ] "Last checked" line in Settings or Deals ("Checked 12 min ago, 8 feeds OK"): the run summary logged since #32 already has the data; store it on a small item the app can read
-5. [ ] Better keyword syntax (in progress): `-word` exclusions and `"exact phrases"`, so a broad keyword like "TV" is less noisy
+5. [x] Better keyword syntax: `-word` exclusions and `"exact phrases"`, so a broad keyword like "TV" is less noisy (see App polish)
 6. [ ] Fetch feeds concurrently (in progress; see Engineering backlog)
 7. [x] Post-deploy smoke test (see Done)
 
@@ -74,7 +74,7 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 - [x] Edit a keyword's highest price in the Keywords screen. Choosing feeds per keyword is not offered: Dealnews is the only live feed, so there is nothing to choose yet
 - [ ] Price-history chart on Detail (needs checker data)
 - [ ] Optional digest instead of one push per deal (Black Friday plan, item 2)
-- [ ] Keyword syntax: `-word` and `-"two words"` exclude a deal, `"exact phrase"` terms must each appear; plain keywords keep working as they do now. The Add/Edit keyword screen shows a one-line hint
+- [x] Keyword syntax: `TV -mount -"wall mount"` skips deals with those words (the store and category count too); `"Pro Max" case` needs each quoted phrase anywhere and the plain words as one phrase in order; a plain keyword works as before. A `-` only excludes before a letter (`-15`, `-5%` stay plain text) and a quote only opens a phrase at the start of a word (`55" OLED` stays plain text). Two keywords that mean the same (case, spacing, quote style, term order) count as duplicates. Curly quotes from the phone keyboard are accepted. New keywords that cannot be read (only exclusions, an unclosed quote) are refused. The Keywords screen shows a one-line hint. Not done: OR between words
 - [ ] Deals without a price: a keyword with a price limit skips them today. Option per keyword to include them marked "no price", or to read a price from the title ("$199") when the feed has none
 - [ ] "Not interested" on a deal in the Deals list, which could suggest an exclusion for that keyword
 - [ ] "Last checked" line (Black Friday plan, item 4)
