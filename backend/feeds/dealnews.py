@@ -36,6 +36,18 @@ REQUIRED = (MAIN_FEED,)  # the others are extras (Black Friday is seasonal): if 
 USER_AGENT = "DealsWatcher/1.0 (personal deal alerts; +https://github.com/vinblue1977/DealsWatcher)"
 MAX_BYTES = 2_000_000
 _PRICE = re.compile(r"\d{1,5}(\.\d{1,2})?")
+# A dollar amount in a title: "$199", "$1,099.99". Used only when the feed gives no price (see _title_price). Anything that
+# makes it look like something else ("$1.99k", "$5%", "$2 million") is not an amount we trust.
+_DOLLARS = re.compile(r"\$(\d{1,3}(?:,\d{3})+|\d{1,5})(\.\d{2})?(?![\w%]|\.\d|,\d)")
+# Amounts that are not the price of the thing. Right after the amount: "$35+", "$5/mo", "$20 off", "$5.99 shipping". Within the
+# next few words: "$100 Best Buy gift card", "$10 Kohl's Cash", "$25 in rewards". Right before it: "save $20", "orders over $50".
+_AFTER_TOUCHING = re.compile(r"[+/]")
+_AFTER_NEXT = re.compile(
+    r"\s*(off(?![\w-])|shipping|delivery|tax|fees?|per\b|a month|monthly|purchase|orders?|spend|discounts?|less\b|more\b)", re.I
+)
+_AFTER_NEARBY = re.compile(r"\b(gift|e-?gift|credit|credits|cash|rewards?|coupons?|rebates?|bonus(es)?|points|promo)\b", re.I)
+_BEFORE_WORDS = "save|saves|saved|saving|over|under|up to|spend|minimum|min\\.?|orders?|above|below|with|extra|earn|win"
+_NOT_A_PRICE_BEFORE = re.compile(rf"\b({_BEFORE_WORDS})\s*$", re.I)
 _UNSAFE_XML = re.compile(rb"<!(DOCTYPE|ENTITY)", re.IGNORECASE)
 # The feed's own fields (price, retailer, category) live in this namespace; title, link, guid and pubDate are plain RSS.
 _NS = "{https://www.dealnews.com/ns/rss/1.0.htm}"
@@ -89,6 +101,27 @@ def _price(text: str | None) -> Decimal | None:
     return amount if amount > 0 else None
 
 
+def _title_price(title: str) -> Decimal | None:
+    """The price named in a title, only when it is clear: exactly one dollar amount is left once amounts that are not the
+    price (discounts, gift cards, shipping, spending thresholds, monthly payments) are set aside. "was $299, now $199" or
+    "from $299 to $199" have two, so no price is guessed. A harmless "$0 shipping" is not counted.
+    """
+    amounts = set()
+    for match in _DOLLARS.finditer(title):
+        after = title[match.end() :]
+        nearby = " ".join(after.split()[:3])  # the next three words
+        if (
+            _AFTER_TOUCHING.match(after)
+            or _AFTER_NEXT.match(after)
+            or _AFTER_NEARBY.search(nearby)
+            or _NOT_A_PRICE_BEFORE.search(title[: match.start()])
+        ):
+            continue
+        if amount := _price(match.group(1).replace(",", "") + (match.group(2) or "")):
+            amounts.add(amount)
+    return amounts.pop() if len(amounts) == 1 else None
+
+
 def parse(body: bytes) -> list[dict[str, Any]]:
     """Deals as plain dicts, in feed order (newest first). Items that are incomplete or link elsewhere are skipped."""
     # NUL bytes or a byte-order mark mean UTF-16/32, where the check below would not see a DOCTYPE; the feed is plain UTF-8.
@@ -98,6 +131,7 @@ def parse(body: bytes) -> list[dict[str, Any]]:
     for item in ElementTree.fromstring(body).iter("item"):  # noqa: S314 - see the import
         field = {child.tag: (child.text or "").strip() for child in item}  # keyed by full name: another namespace can't overwrite
         title, link, guid = field.get("title", ""), field.get("link", ""), field.get("guid", "")
+        feed_price = _price(field.get(_NS + "price"))
         try:
             published = parsedate_to_datetime(field.get("pubDate", "")).astimezone(UTC)
         except TypeError, ValueError:
@@ -109,7 +143,8 @@ def parse(body: bytes) -> list[dict[str, Any]]:
                 "id": _deal_id(guid),
                 "title": title[:300],
                 "url": link,
-                "price": _price(field.get(_NS + "price")),
+                "price": feed_price or _title_price(title),  # the feed's own price wins
+                "price_from_title": feed_price is None,  # a guess: a later feed's own price replaces it (see the checker)
                 "retailer": field.get(_NS + "retailer", "")[:60] or None,
                 "category": field.get(_NS + "category", "")[:60] or None,
                 "published": published,
