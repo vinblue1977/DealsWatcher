@@ -26,7 +26,7 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 ### Black Friday plan (Nov 27), in this order
 
 1. [x] Quiet hours (see App polish)
-2. [ ] Digest instead of one push per deal, or a higher per-run cap: broad keywords will flood the 5-per-run cap (see App polish)
+2. [x] Digest: more than 3 alerts waiting for one user go out as one summary push (see App polish)
 3. [x] ~~Alarm for the checker not running~~: not wanted (2026-10-31). The "Last checked" line (item 4) turns amber after 90 minutes, which covers it without an alarm
 4. [x] "Last checked" line (Deals and Settings): each run saves one shared `CHECKER`/`STATUS` item (time, feeds read, failed, skipped); the app shows "Checked 12 min ago", adds "6 of 8 feeds" when some did not answer, and turns amber with "new deals may be delayed" after 90 minutes. Nothing is saved when the main feed is down or every feed fails, so the line goes stale instead of lying; the line refreshes every 5 minutes and when the app comes back to the front
 5. [x] Better keyword syntax: `-word` exclusions and `"exact phrases"`, so a broad keyword like "TV" is less noisy (see App polish)
@@ -68,12 +68,12 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 
 ## App polish
 
-- [x] Quiet hours (Settings): a whole-hour window, read in the device's time zone (stored when notifications are turned on, and sent again each time the window is saved). Inside it deals are still saved, their alerts wait and go out when the window ends (newest first, 5 per run); an alert held more than 24 hours is dropped. No time zone known means nothing is held
+- [x] Quiet hours (Settings): a whole-hour window, read in the device's time zone (stored when notifications are turned on, and sent again each time the window is saved). Inside it deals are still saved, their alerts wait and go out when the window ends (as one summary push if there are more than 3); an alert held more than 24 hours is dropped. No time zone known means nothing is held
 - [ ] Appearance: Light and Auto (colours are tokens in `frontend/src/styles.css`)
 - [x] Rename a watch on the Detail screen (Name field above the price limit)
 - [x] Edit a keyword's highest price in the Keywords screen. Choosing feeds per keyword is not offered: Dealnews is the only live feed, so there is nothing to choose yet
 - [ ] Price-history chart on Detail (needs checker data)
-- [ ] Optional digest instead of one push per deal (Black Friday plan, item 2)
+- [x] Digest: when more than 3 alerts are waiting for one user (new deals, deals held by quiet hours, deals whose push failed earlier), they go out as one push, "12 new deals" with the busiest keywords ("TV (5), OLED (4), Dyson (2) and 1 more"), opening the Deals list; 3 or fewer still get one push each. This replaced the 5-per-run cap, so a flood is no longer spread over later runs. The summary leaves out keyword syntax (`-mount`, quotes) and counts keywords that differ only in case together. Not done: a daily digest, or a setting for the threshold
 - [x] Keyword syntax: `TV -mount -"wall mount"` skips deals with those words (the store and category count too); `"Pro Max" case` needs each quoted phrase anywhere and the plain words as one phrase in order; a plain keyword works as before. A `-` only excludes before a letter (`-15`, `-5%` stay plain text) and a quote only opens a phrase at the start of a word (`55" OLED` stays plain text). Two keywords that mean the same (case, spacing, quote style, term order) count as duplicates. Curly quotes from the phone keyboard are accepted. New keywords that cannot be read (only exclusions, an unclosed quote) are refused. The Keywords screen shows a one-line hint. Not done: OR between words
 - [x] Deals without a price: when the feed gives none, a price is read from the title, but only if it names exactly one dollar amount ("for $199", "drops to $199"). Discounts ("$20 off", "save $50"), gift cards, cash and rewards, shipping, spending thresholds ("orders over $50", "$35+") and monthly payments are set aside, and two real prices ("was $299, now $199", "from $299 to $199") give no price at all. The feed's own price always wins, also when it comes from a later feed. Not done: a per-keyword option to include deals that still have no price (store-wide Black Friday sales are mostly percentages, so a price limit still skips them)
 - [ ] "Not interested" on a deal in the Deals list, which could suggest an exclusion for that keyword
@@ -84,15 +84,15 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 ## Engineering backlog (from code reviews)
 
 - [ ] Feed checker finds rules with a full-table Scan every 30 minutes: fine now, add a rule index if the table or user count grows
-- [ ] `notify` re-queries a user's devices per deal (at most 5 per run): fetch once per user
+- [ ] `notify` re-queries a user's devices per deal (at most 3 per run now, or one summary): fetch once per user
 - [ ] Share the "load / retry" notice and fetch pattern across screens (repeated in five places)
 - [ ] Rendering tests for the screens (needs a DOM test setup and a new dev dependency; the logic is covered by pure-function tests)
 - [x] Fetch feeds concurrently: three workers, requests start at least 0.5 s apart (an estimate: reading should drop from about 10-15 s to about 4-6 s; check the run log after deploy). Still polite: no bursts, the same 40 s budget, a failing extra feed is only logged
 - A dead or renumbered extra Dealnews feed (a changed category id, say) is only logged, and no alarm will be added (2026-10-31). The "Last checked" line shows "6 of 8 feeds" when some do not answer
-- [ ] A broad keyword (like "TV") on the first run after new feeds can match many deals, but only 5 pushes go out per user per run and deals older than 6 hours are dropped; raise the cap or add a digest if that bites
+- [x] A broad keyword (like "TV") matching many deals on the first run after new feeds: solved by the digest (one summary push)
 - ~~An alarm for the checker not running at all~~: decided against (2026-10-31); see "Decisions on record"
 - ~~Extend the smoke test to prove the checker ran recently~~: dropped with the alarm (it needed extra deploy-role permissions); the app's "Last checked" line shows it instead
-- [ ] Alerts left unsent (quiet hours, the 5-per-run cap, a failed push) are retried until their deal is 24 hours old
+- [ ] Alerts left unsent (quiet hours, a failed push) are retried until their deal is 24 hours old
 - [ ] Duplicate keyword check is read-then-write: two simultaneous adds can slip past (strict fix needs a different key design)
 - [ ] Older keyword rules may still list Reddit or Slickdeals as sources (harmless, hidden in the UI); migrate if it ever matters
 - [ ] Dependabot: `aws-cdk-lib` updates are paused until botocore allows python-dateutil 3 (remove the ignore in `.github/dependabot.yml` then; never merge an update that drops `cryptography` from `layer/requirements.txt`)

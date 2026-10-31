@@ -2,8 +2,10 @@
 
 import logging
 import os
+import re
 import threading
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -25,8 +27,8 @@ KEEP_DAYS = 30
 MAX_WORKERS = 3  # feeds read at the same time
 START_GAP_SECONDS = 0.5  # between the starts of two requests: a few small requests, spaced out, every 30 minutes
 READ_BUDGET_SECONDS = 40  # past this, the extra feeds that have not started are skipped so a slow host cannot eat the whole run
-MAX_PUSHES = 5  # per user per run; deals over the cap stay unsent and go out on the next run
-MAX_HELD_HOURS = 24  # an alert held back (quiet hours, the cap, a failed push) is dropped once its deal is this old
+DIGEST_OVER = 3  # more alerts than this waiting for one user go out as one summary push, not one push each
+MAX_HELD_HOURS = 24  # an alert held back (quiet hours, a failed push) is dropped once its deal is this old
 
 
 def _read_feeds() -> tuple[list[dict[str, Any]], list[str], tuple[int, int, int]]:
@@ -147,11 +149,11 @@ def _is_quiet(table: Any, user: str, now: datetime) -> bool:
     return start <= hour < end if start < end else hour >= start or hour < end
 
 
-def _held(table: Any, user: str, now: datetime, skip: set[str], limit: int, keywords: set[str]) -> list[dict[str, Any]]:
-    """This user's stored deals whose alert has not gone out, newest first (at most `limit`), except those in `skip` and those
-    whose keyword the user has since deleted or turned off (`keywords`: the enabled ones, case-folded)."""
-    if limit <= 0:
-        return []
+def _unsent(table: Any, user: str, now: datetime, keywords: set[str]) -> list[dict[str, Any]]:
+    """This user's stored deals whose alert has not gone out, newest first: new ones, ones held back (quiet hours) and ones
+    whose push failed. Deals older than MAX_HELD_HOURS, and those whose keyword the user has since deleted or turned off
+    (`keywords`: the enabled ones, case-folded), are left out.
+    """
     found: list[dict[str, Any]] = []
     oldest = (now - timedelta(hours=MAX_HELD_HOURS)).isoformat()
     kwargs: dict[str, Any] = {
@@ -161,16 +163,45 @@ def _held(table: Any, user: str, now: datetime, skip: set[str], limit: int, keyw
     }
     while True:
         page = table.query(**kwargs)
-        found += [i for i in page["Items"] if i["SK"] not in skip and str(i.get("keyword", "")).casefold() in keywords]
+        found += [i for i in page["Items"] if str(i.get("keyword", "")).casefold() in keywords]
         if "LastEvaluatedKey" not in page:
             break
         kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
-    return sorted(found, key=lambda i: i["publishedAt"], reverse=True)[:limit]
+    return sorted(found, key=lambda i: i["publishedAt"], reverse=True)
 
 
-def _claim(table: Any, user: str, deal: dict[str, Any], rule: dict[str, Any], now: datetime) -> tuple[dict[str, str], str]:
-    """Stores the deal for the user. Returns its key and "new" (just stored), "retry" (stored earlier but its alert never went
-    out) or "done" (stored and alerted).
+_EXCLUSION = re.compile(r'-"[^"]*"|(?<!\S)-[^\W\d_]\S*')
+
+
+def _label(keyword: str) -> str:
+    """A keyword as the summary shows it: without its `-exclusions` and quote marks (`TV -mount "Pro Max"` reads `TV Pro Max`)."""
+    return " ".join(_EXCLUSION.sub("", keyword).replace('"', "").split()) or keyword
+
+
+def _digest(unsent: list[dict[str, Any]]) -> tuple[str, str]:
+    """One summary push for many deals: "12 new deals", then the keywords with the most ("TV (5), OLED (4) and 2 more").
+    Keywords that differ only in case count together.
+    """
+    shown: dict[str, str] = {}
+    per_keyword: Counter[str] = Counter()
+    for item in unsent:  # newest first, so ties keep the newest keyword first
+        label = _label(item["keyword"])
+        shown.setdefault(label.casefold(), label)
+        per_keyword[label.casefold()] += 1
+    top = ", ".join(f"{shown[key]} ({count})" for key, count in per_keyword.most_common(3))
+    more = len(per_keyword) - 3
+    return f"{len(unsent)} new deals", f"{top} and {more} more" if more > 0 else top
+
+
+def _mark_sent(table: Any, item: dict[str, Any]) -> None:
+    table.update_item(
+        Key={"PK": item["PK"], "SK": item["SK"]}, UpdateExpression="SET pushed = :yes", ExpressionAttributeValues={":yes": True}
+    )
+
+
+def _claim(table: Any, user: str, deal: dict[str, Any], rule: dict[str, Any], now: datetime) -> str:
+    """Stores the deal for the user. Returns "new" (just stored), "retry" (stored earlier but its alert never went out) or
+    "done" (stored and alerted).
     """
     key = {
         "PK": f"USER#{user}",
@@ -194,8 +225,8 @@ def _claim(table: Any, user: str, deal: dict[str, Any], rule: dict[str, Any], no
         table.put_item(Item=item, ConditionExpression="attribute_not_exists(PK)")
     except table.meta.client.exceptions.ConditionalCheckFailedException:
         existing = table.get_item(Key=key).get("Item")
-        return key, "retry" if existing and existing.get("pushed") is False else "done"
-    return key, "new"
+        return "retry" if existing and existing.get("pushed") is False else "done"
+    return "new"
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
@@ -207,43 +238,45 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
     deals = dealnews.age_limit(now, found, MAX_AGE_HOURS)
     saved = pushed = failed = matched = already_sent = 0
     for user, rules in _rules_by_user(table).items():
-        attempts = 0
-        sent_keys: set[str] = set()
         quiet = _is_quiet(table, user, now)  # quiet: deals are still saved, their alerts wait for the window to end
         for deal in deals:
             rule = next((r for r in rules if matches(r, deal, SOURCE)), None)
             if rule is None:
                 continue
             matched += 1
-            try:  # one deal or user failing must not stop the others
-                key, state = _claim(table, user, deal, rule, now)
+            try:  # one deal failing to save must not stop the others
+                state = _claim(table, user, deal, rule, now)
                 saved += state == "new"
                 already_sent += state == "done"
-                if state == "done" or quiet or attempts >= MAX_PUSHES:
-                    continue  # quiet or over the cap: stays unsent, goes out on a later run
-                attempts += 1  # counted even if it fails, so a broken push path can't bypass the cap
-                sent_keys.add(key["SK"])
-                pushed += notify(table, user, f"New deal: {rule['keyword']}", deal["title"], "/#/deals", strict=True)
-                table.update_item(Key=key, UpdateExpression="SET pushed = :yes", ExpressionAttributeValues={":yes": True})
             except Exception:
-                log.exception("deal alert failed")
+                log.exception("deal could not be saved")
                 failed += 1
         if quiet:
             continue
-        try:  # alerts held back earlier (quiet hours ended, or the deal has since left the feed) go out now, newest first
-            held = _held(table, user, now, sent_keys, MAX_PUSHES - attempts, {r["keyword"].casefold() for r in rules})
+        try:  # everything waiting for this user: new deals, ones held back, ones whose push failed earlier
+            unsent = _unsent(table, user, now, {r["keyword"].casefold() for r in rules})
+            if len(unsent) > DIGEST_OVER:  # a flood (Black Friday, or a quiet window just ended): one push, not dozens
+                title, body = _digest(unsent)
+                pushed += notify(table, user, title, body, "/#/deals", strict=True)
+                for waiting in unsent:  # the push is out: one write failing must not leave the rest to be sent again
+                    try:
+                        _mark_sent(table, waiting)
+                    except Exception:
+                        log.exception("deal could not be marked sent")
+                        failed += 1
+            else:
+                for waiting in unsent:  # one deal failing must not stop the others
+                    try:
+                        pushed += notify(
+                            table, user, f"New deal: {waiting['keyword']}", waiting["title"], "/#/deals", strict=True
+                        )
+                        _mark_sent(table, waiting)
+                    except Exception:
+                        log.exception("deal alert failed")
+                        failed += 1
         except Exception:
-            log.exception("held alerts could not be read")
+            log.exception("deal alerts failed")
             failed += 1
-            continue
-        for old in held:
-            try:
-                pushed += notify(table, user, f"New deal: {old['keyword']}", old["title"], "/#/deals", strict=True)
-                held_key = {"PK": old["PK"], "SK": old["SK"]}
-                table.update_item(Key=held_key, UpdateExpression="SET pushed = :yes", ExpressionAttributeValues={":yes": True})
-            except Exception:
-                log.exception("held deal alert failed")
-                failed += 1
     log.info(
         "deals: %d read, %d recent, %d matched (%d new, %d already sent), %d pushed, %d failed",
         len(found),

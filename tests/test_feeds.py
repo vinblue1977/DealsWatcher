@@ -396,16 +396,101 @@ class TestHandler:
         (saved,) = deals_of(table)
         assert "price" not in saved
 
-    def test_pushes_are_capped_per_run_and_the_rest_go_out_on_the_next_run(
+    def test_a_flood_of_deals_goes_out_as_one_summary_push(
         self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         add_rule(table, keyword="TV")
-        monkeypatch.setattr(feeds, "MAX_PUSHES", 2)
         items = [item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(4)]
-        assert run(monkeypatch, *items)["saved"] == 4 and len(pushes) == 2
-        assert run(monkeypatch, *items) == {"deals": 4, "saved": 0, "pushed": 2}  # the two left over, none repeated
-        assert len(pushes) == 4 and len({p[2] for p in pushes}) == 4
-        assert run(monkeypatch, *items)["pushed"] == 0
+        assert run(monkeypatch, *items) == {"deals": 4, "saved": 4, "pushed": 1}
+        assert pushes == [(USER, "4 new deals", "TV (4)", "/#/deals")]
+        assert all(d["pushed"] is True for d in deals_of(table))
+        assert run(monkeypatch, *items)["pushed"] == 0  # none repeated
+
+    def test_up_to_the_limit_each_deal_still_gets_its_own_push(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="TV")
+        items = [item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(feeds.DIGEST_OVER)]
+        assert run(monkeypatch, *items)["pushed"] == feeds.DIGEST_OVER
+        assert sorted(p[1] for p in pushes) == ["New deal: TV"] * feeds.DIGEST_OVER
+
+    def test_the_summary_names_the_busiest_keywords(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        for n, word in enumerate(["TV", "OLED", "Dyson", "AirPods"]):
+            add_rule(table, rid=f"r{n}", keyword=word)
+        items = [item(f"t{i}", title=f"TV deal {i}", minutes_ago=i + 1, category="Misc") for i in range(3)]
+        items += [item(f"o{i}", title=f"OLED deal {i}", minutes_ago=i + 10, category="Misc") for i in range(2)]
+        items += [
+            item("d", title="Dyson deal", minutes_ago=20, category="Misc"),
+            item("a", title="AirPods deal", minutes_ago=21, category="Misc"),
+        ]
+        run(monkeypatch, *items)
+        assert pushes == [(USER, "7 new deals", "TV (3), OLED (2), Dyson (1) and 1 more", "/#/deals")]
+
+    def test_the_summary_groups_keywords_by_case_and_leaves_out_the_syntax(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, rid="r1", keyword='TV -mount -"wall mount"')
+        add_rule(table, rid="r2", keyword="OLED")
+        items = [item(f"t{i}", title=f"TV deal {i}", minutes_ago=i + 1, category="Misc") for i in range(2)]
+        items += [item(f"o{i}", title=f"OLED deal {i}", minutes_ago=i + 10, category="Misc") for i in range(2)]
+        run(monkeypatch, *items)
+        assert feeds._digest(
+            [{"keyword": "TV -mount"}, {"keyword": "tv"}, {"keyword": "Tv"}, {"keyword": '"Pro Max" -case'}]
+        ) == (
+            "4 new deals",
+            "TV (3), Pro Max (1)",
+        )
+        assert pushes == [(USER, "4 new deals", "TV (2), OLED (2)", "/#/deals")]
+
+    def test_one_failed_mark_after_the_summary_does_not_leave_the_rest_to_be_sent_again(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="TV")
+        real = feeds._mark_sent
+        calls: list[str] = []
+
+        def flaky(table: Any, waiting: dict[str, Any]) -> None:
+            calls.append(waiting["SK"])
+            if len(calls) == 2:
+                raise RuntimeError("throttled")
+            real(table, waiting)
+
+        monkeypatch.setattr(feeds, "_mark_sent", flaky)
+        items = [item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(5)]
+        with pytest.raises(RuntimeError, match="1 deal alerts failed"):
+            run(monkeypatch, *items)
+        assert len(calls) == 5 and sorted(d["pushed"] for d in deals_of(table)) == [False, True, True, True, True]
+        assert len(pushes) == 1  # the summary went out once
+
+    def test_each_user_gets_their_own_summary(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, USER, keyword="TV")
+        add_rule(table, OTHER, keyword="TV")
+        run(monkeypatch, *(item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(4)))
+        assert sorted(p[0] for p in pushes) == sorted([OTHER, USER]) and {p[1] for p in pushes} == {"4 new deals"}
+
+    def test_the_boundary_is_more_than_the_limit(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="TV")
+        run(monkeypatch, *(item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(feeds.DIGEST_OVER + 1)))
+        assert len(pushes) == 1  # one more than the limit: a summary
+
+    def test_a_failed_summary_keeps_every_deal_unsent_and_is_retried(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="TV")
+        down = {"on": True}
+        sent: list[str] = []
+
+        def flaky(table: Any, user: str, title: str, body: str, url: str = "/", **kw: Any) -> int:
+            if down["on"]:
+                raise RuntimeError("push service down")
+            sent.append(title)
+            return 1
+
+        monkeypatch.setattr(feeds, "notify", flaky)
+        items = [item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(5)]
+        with pytest.raises(RuntimeError, match="1 deal alerts failed"):
+            run(monkeypatch, *items)
+        assert [d["pushed"] for d in deals_of(table)] == [False] * 5
+        down["on"] = False
+        assert run(monkeypatch, *items)["pushed"] == 1 and sent == ["5 new deals"]
 
     def test_a_failed_push_is_reported_retried_and_does_not_stop_others(
         self, table: Any, monkeypatch: pytest.MonkeyPatch
@@ -430,15 +515,6 @@ class TestHandler:
         assert run(monkeypatch, item("1")) == {"deals": 1, "saved": 0, "pushed": 1}  # the missed alert goes out now
         assert deals_of(table, USER)[0]["pushed"] is True
         assert run(monkeypatch, item("1"))["pushed"] == 0
-
-    def test_a_failing_push_still_counts_toward_the_cap(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-        add_rule(table, keyword="TV")
-        monkeypatch.setattr(feeds, "MAX_PUSHES", 2)
-        calls: list[str] = []
-        monkeypatch.setattr(feeds, "notify", lambda *a, **k: calls.append("x") or (_ for _ in ()).throw(RuntimeError("down")))
-        with pytest.raises(RuntimeError, match="2 deal alerts failed; feeds down: none"):
-            run(monkeypatch, *(item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(5)))
-        assert len(calls) == 2
 
     def test_a_broken_rule_does_not_stop_the_run(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
         table.put_item(Item={"PK": f"USER#{USER}", "SK": "RULE#bad1", "enabled": True, "sources": ["dealnews"]})  # no keyword
@@ -674,14 +750,14 @@ class TestQuietHours:
         assert run(monkeypatch)["pushed"] == 1 and len(pushes) == 1  # the deal has left the feed: it still goes out
         assert run(monkeypatch)["pushed"] == 0
 
-    def test_held_alerts_share_the_per_run_cap(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_a_long_quiet_window_ends_with_one_summary(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
         add_rule(table, keyword="TV")
-        monkeypatch.setattr(feeds, "MAX_PUSHES", 2)
         self.profile(table, 22, 8)
         run(monkeypatch, *(item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(4)))
+        assert pushes == []
         self.profile(table, 22, 7)
-        assert run(monkeypatch)["pushed"] == 2 and run(monkeypatch)["pushed"] == 2 and run(monkeypatch)["pushed"] == 0
-        assert len({p[2] for p in pushes}) == 4
+        assert run(monkeypatch)["pushed"] == 1 and pushes == [(USER, "4 new deals", "TV (4)", "/#/deals")]
+        assert run(monkeypatch)["pushed"] == 0
 
     def test_a_deal_held_more_than_a_day_is_dropped(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
         table.put_item(
