@@ -2,7 +2,9 @@
 
 import logging
 import os
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -20,8 +22,9 @@ log.setLevel(logging.INFO)  # Lambda's logger starts at WARNING, which would hid
 SOURCE = "dealnews"
 MAX_AGE_HOURS = 6  # a first run, or a long outage, must not alert on old deals
 KEEP_DAYS = 30
-PAUSE_SECONDS = 1  # between feed requests: a few small requests, spaced out, every 30 minutes
-READ_BUDGET_SECONDS = 40  # past this, the remaining extra feeds are skipped so a slow host cannot eat the whole run
+MAX_WORKERS = 3  # feeds read at the same time
+START_GAP_SECONDS = 0.5  # between the starts of two requests: a few small requests, spaced out, every 30 minutes
+READ_BUDGET_SECONDS = 40  # past this, the extra feeds that have not started are skipped so a slow host cannot eat the whole run
 MAX_PUSHES = 5  # per user per run; deals over the cap stay unsent and go out on the next run
 MAX_HELD_HOURS = 24  # an alert held back (quiet hours, the cap, a failed push) is dropped once its deal is this old
 
@@ -29,34 +32,54 @@ MAX_HELD_HOURS = 24  # an alert held back (quiet hours, the cap, a failed push) 
 def _read_feeds() -> tuple[list[dict[str, Any]], list[str]]:
     """Deals from every feed, newest first, each deal once (one in several feeds counts once), and the required feeds that failed.
 
-    One feed being down must not hide the others' deals. If every feed fails, the first error is raised. A failing extra feed
-    (Black Friday, popular, editors', categories) is only logged, so it cannot keep the checker permanently red. Once the read
-    budget is spent the remaining extras are skipped (logged), so a slow host cannot use up the run.
+    The feeds are read a few at a time (MAX_WORKERS), and each request starts at least START_GAP_SECONDS after the one before,
+    so Dealnews sees a few small requests, not a burst. One feed being down must not hide the others' deals. If every feed
+    fails, the first error (in FEEDS order) is raised. A failing extra feed (Black Friday, popular, editors', categories) is
+    only logged, so it cannot keep the checker permanently red. Once the read budget is spent the extras that have not started
+    are skipped (logged), so a slow host cannot use up the run.
     """
+    started = time.monotonic()
+    gate = threading.Lock()  # one request starts at a time
+    last_start: float | None = None
+
+    def read(number: int, url: str) -> list[dict[str, Any]] | None:
+        """The feed's deals, or None when the budget is spent before it could start."""
+        nonlocal last_start
+        with gate:
+            if number and time.monotonic() - started > READ_BUDGET_SECONDS:
+                return None
+            if last_start is not None and (wait := last_start + START_GAP_SECONDS - time.monotonic()) > 0:
+                time.sleep(wait)
+            last_start = time.monotonic()
+        return dealnews.parse(dealnews.fetch(url))
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        results = [pool.submit(read, number, url) for number, url in enumerate(dealnews.FEEDS)]
     deals: dict[str, dict[str, Any]] = {}
     down: list[str] = []
-    read = skipped = 0
+    read_count = skipped = 0
     first_error: Exception | None = None
-    started = time.monotonic()
-    for number, url in enumerate(dealnews.FEEDS):
-        if number:
-            if time.monotonic() - started > READ_BUDGET_SECONDS:
-                log.warning("read budget spent, skipping feed: %s", url)
-                skipped += 1
-                continue
-            time.sleep(PAUSE_SECONDS)
+    for url, result in zip(dealnews.FEEDS, results, strict=True):  # in FEEDS order, so the merge below never depends on timing
         try:
-            for deal in dealnews.parse(dealnews.fetch(url)):
-                kept = deals.setdefault(deal["id"], deal)
-                for field in ("price", "retailer", "category"):  # a copy without a price must not hide a priced one
-                    if kept[field] is None and deal[field] is not None:
-                        kept[field] = deal[field]
-            read += 1
+            found = result.result()
         except Exception as e:
-            log.exception("feed could not be read: %s", url)
+            log.error("feed could not be read: %s", url, exc_info=e)
             first_error = first_error or e
             down.append(url)
-    log.info("feeds: %d read, %d failed, %d skipped", read, len(down), skipped)  # counts only: no keywords, titles or addresses
+            continue
+        if found is None:
+            log.warning("read budget spent, skipping feed: %s", url)
+            skipped += 1
+            continue
+        for deal in found:
+            kept = deals.setdefault(deal["id"], deal)
+            for field in ("price", "retailer", "category"):  # a copy without a price must not hide a priced one
+                if kept[field] is None and deal[field] is not None:
+                    kept[field] = deal[field]
+        read_count += 1
+    log.info(
+        "feeds: %d read, %d failed, %d skipped", read_count, len(down), skipped
+    )  # counts only: no keywords, titles or addresses
     if len(down) == len(dealnews.FEEDS) and first_error is not None:
         raise first_error
     return sorted(deals.values(), key=lambda d: d["published"], reverse=True), [u for u in down if u in dealnews.REQUIRED]
