@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 
 import { api } from './api';
-import { parsePrice, retailerFor, STORE_NAMES } from './format';
+import { NO_CHECKER_NOTE, parsePrice, retailerFor, STORE_NAMES, STORE_PRICES_CHECKED } from './format';
 import { Switch } from './Switch';
 import { go } from './router';
 
@@ -48,6 +48,7 @@ export function AddWatch() {
         <h1>Add watch</h1>
         <span class="spacer" />
       </header>
+      {!STORE_PRICES_CHECKED && <p class="muted small">{NO_CHECKER_NOTE}</p>}
 
       <div class="field">
         <label for="url">Product link</label>

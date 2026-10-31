@@ -13,6 +13,14 @@ const RETAILERS: Record<string, string> = {
 
 export const STORE_NAMES = Object.values(RETAILERS);
 
+/** Whether anything reads store prices. Not yet (see ROADMAP "Store price checking"): watches are only saved, so the app says
+ * so instead of promising a first check. Flip this to true in the PR that ships the first store checker. */
+export const STORE_PRICES_CHECKED = false;
+
+export const NO_CHECKER_EMPTY = "Store prices aren't read yet, so a watch only keeps your list and target for now. For deal alerts today, use Keywords.";
+
+export const NO_CHECKER_NOTE = "Store prices aren't read yet. Your watch is saved with its target, and alerts start once a store checker is added. For deal alerts today, use Keywords.";
+
 /** A plain https link (no embedded credentials) as a URL, else null. */
 export function httpsUrl(link: string): URL | null {
   try {
@@ -87,14 +95,19 @@ export interface WatchState {
   atTarget: boolean;
   /** The checker couldn't read this product's price. */
   blocked: boolean;
+  /** Nothing reads this product's price at all (there is no store checker yet): the app says so. */
+  noChecker: boolean;
 }
 
-export function watchState(w: Watch): WatchState {
-  if (w.paused) return { label: 'Paused', tone: 'muted', atTarget: false, blocked: false };
-  if (w.status === 'blocked') return { label: "Can't read price", tone: 'warn', atTarget: false, blocked: true };
-  if (w.lastPrice === undefined) return { label: 'Waiting for first check', tone: 'muted', atTarget: false, blocked: false };
-  if (w.lastPrice <= w.targetPrice) return { label: 'At target', tone: 'good', atTarget: true, blocked: false };
-  return { label: `${targetMoney(Math.round((w.lastPrice - w.targetPrice) * 100) / 100)} above target`, tone: 'muted', atTarget: false, blocked: false };
+export function watchState(w: Watch, storePricesChecked = STORE_PRICES_CHECKED): WatchState {
+  const base = { atTarget: false, blocked: false, noChecker: false };
+  if (w.paused) return { ...base, label: 'Paused', tone: 'muted' };
+  if (w.status === 'blocked') return { ...base, label: "Can't read price", tone: 'warn', blocked: true };
+  if (w.lastPrice === undefined) {
+    return { ...base, label: storePricesChecked ? 'Waiting for first check' : 'Prices not read yet', tone: 'muted', noChecker: !storePricesChecked };
+  }
+  if (w.lastPrice <= w.targetPrice) return { ...base, label: 'At target', tone: 'good', atTarget: true };
+  return { ...base, label: `${targetMoney(Math.round((w.lastPrice - w.targetPrice) * 100) / 100)} above target`, tone: 'muted' };
 }
 
 /** Subtitle under "Watching": the count and when the newest check happened. */

@@ -15,7 +15,7 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 - [x] Security hardening pass (least-privilege table access, request size cap, push endpoint kept out of URLs)
 - [x] Alert topic + crash alarm on the feed checker: emails when it fails on two runs in a row (about an hour); no recovery email, and no email if it stops running at all (see Engineering backlog); the address comes from a deploy secret
 - [x] Multi-user: invite-only accounts (no sign-up page), invitation email with setup steps, `scripts/invite_user.sh` and `scripts/remove_user.py` (removes the account and all of their data), per-user isolation tested on every route. See `docs/users.md`
-- [x] Post-deploy smoke test (`scripts/smoke_test.sh`, run by the deploy job): the table is ACTIVE; the site serves the app, its security headers, its files, a deep link and a `config.json` that matches the API; every API route answers 401 without a token. Read-only, never signs in or sends a push. The script itself is tested against a local stand-in (`tests/test_smoke.py`). Not covered: that the checker ran (needs extra deploy-role permissions; see the alarm item below)
+- [x] Post-deploy smoke test (`scripts/smoke_test.sh`, run by the deploy job): the table is ACTIVE; the site serves the app, its security headers, its files, a deep link and a `config.json` that matches the API; every API route answers 401 without a token. Read-only, never signs in or sends a push. The script itself is tested against a local stand-in (`tests/test_smoke.py`). Not covered: that the checker ran (the app's "Last checked" line shows that)
 
 ## Next
 
@@ -27,7 +27,7 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 
 1. [x] Quiet hours (see App polish)
 2. [ ] Digest instead of one push per deal, or a higher per-run cap: broad keywords will flood the 5-per-run cap (see App polish)
-3. [ ] Alarm for the checker not running at all, and a metric or alarm for a dead extra feed (see Engineering backlog)
+3. [x] ~~Alarm for the checker not running~~: not wanted (2026-10-31). The "Last checked" line (item 4) turns amber after 90 minutes, which covers it without an alarm
 4. [x] "Last checked" line (Deals and Settings): each run saves one shared `CHECKER`/`STATUS` item (time, feeds read, failed, skipped); the app shows "Checked 12 min ago", adds "6 of 8 feeds" when some did not answer, and turns amber with "new deals may be delayed" after 90 minutes. Nothing is saved when the main feed is down or every feed fails, so the line goes stale instead of lying; the line refreshes every 5 minutes and when the app comes back to the front
 5. [x] Better keyword syntax: `-word` exclusions and `"exact phrases"`, so a broad keyword like "TV" is less noisy (see App polish)
 6. [x] Fetch feeds concurrently (see Engineering backlog)
@@ -78,7 +78,7 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 - [x] Deals without a price: when the feed gives none, a price is read from the title, but only if it names exactly one dollar amount ("for $199", "drops to $199"). Discounts ("$20 off", "save $50"), gift cards, cash and rewards, shipping, spending thresholds ("orders over $50", "$35+") and monthly payments are set aside, and two real prices ("was $299, now $199", "from $299 to $199") give no price at all. The feed's own price always wins, also when it comes from a later feed. Not done: a per-keyword option to include deals that still have no price (store-wide Black Friday sales are mostly percentages, so a price limit still skips them)
 - [ ] "Not interested" on a deal in the Deals list, which could suggest an exclusion for that keyword
 - [x] "Last checked" line (Black Friday plan, item 4)
-- [ ] Watches whose store has no checker show "Waiting for first check" forever: hide or relabel them ("Not checked yet, store prices are not read") until a store checker exists, so the app does not look broken to invited people
+- [x] Watches whose store has no checker: the app says so instead of "Waiting for first check" forever. The pill reads "Prices not read yet", Watching, Add and Detail show one note ("Store prices aren't read yet ... use Keywords"), the "Checking this product" switch is hidden (unless the watch is already paused, so it can be resumed), and the notification text only mentions keyword deals. One flag, `STORE_PRICES_CHECKED` in `frontend/src/format.ts`, switches all of it back: flip it in the PR that ships the first store checker
 - [ ] More users (items are keyed per user; checks would be shared per product link)
 
 ## Engineering backlog (from code reviews)
@@ -88,10 +88,10 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 - [ ] Share the "load / retry" notice and fetch pattern across screens (repeated in five places)
 - [ ] Rendering tests for the screens (needs a DOM test setup and a new dev dependency; the logic is covered by pure-function tests)
 - [x] Fetch feeds concurrently: three workers, requests start at least 0.5 s apart (an estimate: reading should drop from about 10-15 s to about 4-6 s; check the run log after deploy). Still polite: no bursts, the same 40 s budget, a failing extra feed is only logged
-- [ ] A dead or renumbered extra Dealnews feed (a changed category id, say) is only logged, so nothing alerts you; add a metric or alarm if coverage matters (an alarm costs ~$0.10/month past the free 10)
+- A dead or renumbered extra Dealnews feed (a changed category id, say) is only logged, and no alarm will be added (2026-10-31). The "Last checked" line shows "6 of 8 feeds" when some do not answer
 - [ ] A broad keyword (like "TV") on the first run after new feeds can match many deals, but only 5 pushes go out per user per run and deals older than 6 hours are dropped; raise the cap or add a digest if that bites
-- [ ] An alarm for the checker not running at all (no invocations for hours): a second alarm, ~$0.10/month once past the free 10. Do this one before Black Friday
-- [ ] Extend the smoke test to prove the checker ran recently (the deploy role needs permission to read the checker's logs or metrics; best done with the alarm above)
+- ~~An alarm for the checker not running at all~~: decided against (2026-10-31); see "Decisions on record"
+- ~~Extend the smoke test to prove the checker ran recently~~: dropped with the alarm (it needed extra deploy-role permissions); the app's "Last checked" line shows it instead
 - [ ] Alerts left unsent (quiet hours, the 5-per-run cap, a failed push) are retried until their deal is 24 hours old
 - [ ] Duplicate keyword check is read-then-write: two simultaneous adds can slip past (strict fix needs a different key design)
 - [ ] Older keyword rules may still list Reddit or Slickdeals as sources (harmless, hidden in the UI); migrate if it ever matters
@@ -104,4 +104,5 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 
 - Password sign-in stays on next to passkeys: it is the backup if the phone is lost (2026-10-28)
 - Slickdeals and Reddit are not read; the reasons are in the table above (2026-10-29)
+- No CloudWatch alarms beyond the existing crash alarm: not for the checker not running, not for a dead extra feed (2026-10-31). The app's "Last checked" line is the signal instead
 - Code review (`/code-review high`) runs on every code diff before it is committed, and its findings go in the PR (2026-10-29)

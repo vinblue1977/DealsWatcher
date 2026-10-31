@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 
+import { STORE_PRICES_CHECKED } from './format';
 import { disablePush, enablePush, pushState, testPush, type PushState } from './push';
 
 const BELL = 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0';
@@ -13,7 +14,7 @@ const TEXT: Record<Exclude<View, 'error'>, { title: string; detail: string }> = 
   },
   unsupported: { title: 'Notifications are not available', detail: 'This browser cannot receive push notifications.' },
   blocked: { title: 'Notifications are blocked', detail: 'Turn them on in the iPhone Settings app, under Notifications, then come back.' },
-  off: { title: 'Notifications are off', detail: 'Get a push alert when a price drops or a deal matches.' },
+  off: { title: 'Notifications are off', detail: STORE_PRICES_CHECKED ? 'Get a push alert when a price drops or a deal matches.' : 'Get a push alert when a deal matches one of your keywords.' },
   on: { title: 'Notifications are on', detail: 'This device' },
 };
 
