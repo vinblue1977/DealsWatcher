@@ -1,4 +1,5 @@
 import { Notifications } from './Notifications';
+import { QuietHours } from './QuietHours';
 
 export function Settings({ email, onSignOut, passkeyUrl }: { email: string; onSignOut: () => void; passkeyUrl: string }) {
   return (
@@ -7,6 +8,7 @@ export function Settings({ email, onSignOut, passkeyUrl }: { email: string; onSi
         <h1>Settings</h1>
       </header>
       <Notifications />
+      <QuietHours />
       <section class="group">
         <div class="setting">
           <span>Signed in</span>

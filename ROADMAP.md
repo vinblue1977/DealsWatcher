@@ -57,7 +57,7 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 
 ## App polish
 
-- [ ] Quiet hours (Settings mockup; the app already stores the device time zone, the checker does not use it yet)
+- [x] Quiet hours (Settings): a whole-hour window, read in the device's time zone (stored when notifications are turned on, and sent again each time the window is saved). Inside it deals are still saved, their alerts wait and go out when the window ends (newest first, 5 per run); an alert held more than 24 hours is dropped. No time zone known means nothing is held
 - [ ] Appearance: Light and Auto (colours are tokens in `frontend/src/styles.css`)
 - [x] Rename a watch on the Detail screen (Name field above the price limit)
 - [x] Edit a keyword's highest price in the Keywords screen. Choosing feeds per keyword is not offered: Dealnews is the only live feed, so there is nothing to choose yet
@@ -75,7 +75,7 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 - [ ] A dead or renumbered extra Dealnews feed (a changed category id, say) is only logged, so nothing alerts you; add a metric or alarm if coverage matters (an alarm costs ~$0.10/month past the free 10)
 - [ ] A broad keyword (like "TV") on the first run after new feeds can match many deals, but only 5 pushes go out per user per run and deals older than 6 hours are dropped; raise the cap or add a digest if that bites
 - [ ] An alarm for the checker not running at all (no invocations for hours): a second alarm, ~$0.10/month once past the free 10
-- [ ] Alerts left unsent are only retried while their deal is still in a feed and under 6 hours old
+- [ ] Alerts left unsent (quiet hours, the 5-per-run cap, a failed push) are retried until their deal is 24 hours old
 - [ ] Duplicate keyword check is read-then-write: two simultaneous adds can slip past (strict fix needs a different key design)
 - [ ] Older keyword rules may still list Reddit or Slickdeals as sources (harmless, hidden in the UI); migrate if it ever matters
 - [ ] Dependabot: `aws-cdk-lib` updates are paused until botocore allows python-dateutil 3 (remove the ignore in `.github/dependabot.yml` then; never merge an update that drops `cryptography` from `layer/requirements.txt`)

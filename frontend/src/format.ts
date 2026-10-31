@@ -131,3 +131,8 @@ export function visibleWatches(watches: Watch[], filter: WatchFilter): Watch[] {
     return filter === 'all' || (filter === 'target' ? state.atTarget : state.blocked);
   });
 }
+
+/** An hour of the day (0-23) as the mockups show it: "10 PM", "12 AM". */
+export function hourLabel(hour: number): string {
+  return `${hour % 12 || 12} ${hour < 12 ? 'AM' : 'PM'}`;
+}
