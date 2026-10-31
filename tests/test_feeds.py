@@ -1,6 +1,7 @@
 """Feed checker: parsing the Dealnews feed, keyword matching, and saving and alerting once per deal."""
 
 import logging
+import threading
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -339,6 +340,7 @@ class TestHandler:
             clock.now += feeds.READ_BUDGET_SECONDS
             return feed()
 
+        monkeypatch.setattr(feeds, "MAX_WORKERS", 1)
         monkeypatch.setattr(feeds.dealnews, "fetch", slow)
         monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
         with caplog.at_level(logging.INFO, logger="feeds.handler"):
@@ -583,9 +585,12 @@ class TestBlackFridayFeed:
 
     def test_requests_are_spaced_out(self, table: Any, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
         run(monkeypatch)
-        assert clock.sleeps == [feeds.PAUSE_SECONDS] * (len(dealnews.FEEDS) - 1)  # a pause between feeds, none before the first
+        assert clock.sleeps == [feeds.START_GAP_SECONDS] * (
+            len(dealnews.FEEDS) - 1
+        )  # a gap between starts, none before the first
 
     def test_a_slow_host_cannot_use_up_the_run(self, table: Any, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
+        monkeypatch.setattr(feeds, "MAX_WORKERS", 1)  # one at a time, so each feed finishes before the next one starts
         asked: list[str] = []
 
         def slow(url: str) -> bytes:
@@ -608,10 +613,10 @@ class TestBlackFridayFeed:
         assert len(pushes) == 1 and len(deals_of(table)) == 1  # the working feed was still processed
 
     def test_every_feed_down_raises_the_first_error(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-        errors = iter([OSError("main down"), *(OSError("an extra feed down") for _ in dealnews.FEEDS[1:])])
-
         def fetch(url: str) -> bytes:
-            raise next(errors)
+            raise OSError(
+                "main down" if url == dealnews.MAIN_FEED else "an extra feed down"
+            )  # the first error in FEEDS order is the one raised, whichever thread fails first
 
         monkeypatch.setattr(feeds.dealnews, "fetch", fetch)
         with pytest.raises(OSError, match="main down"):
@@ -790,3 +795,51 @@ class TestKeywordSyntax:
     @pytest.mark.parametrize("keyword", ["-mount", '""', '"unclosed', 'say "hi', '-"wall mount"', '-"open', "", "   "])
     def test_unreadable_keywords(self, keyword: str) -> None:
         assert feeds_matching.parse_keyword(keyword) is None
+
+
+class TestConcurrentReads:
+    def test_feeds_are_read_at_the_same_time_but_never_more_than_the_limit(
+        self, table: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        lock, release = threading.Lock(), threading.Event()
+        running = peak = 0
+
+        def fetch(url: str) -> bytes:
+            nonlocal running, peak
+            with lock:
+                running += 1
+                peak = max(peak, running)
+                if running == feeds.MAX_WORKERS:
+                    release.set()  # as many as allowed are in flight at once
+            assert release.wait(5), "the feeds were read one after another"
+            with lock:
+                running -= 1
+            return feed()
+
+        monkeypatch.setattr(feeds.dealnews, "fetch", fetch)
+        monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
+        assert feeds.handler({}, None)["deals"] == 0
+        assert peak == feeds.MAX_WORKERS == 3
+
+    def test_the_merge_does_not_depend_on_which_feed_answers_first(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="OLED")
+        bodies = {url: feed() for url in dealnews.FEEDS} | {
+            dealnews.MAIN_FEED: feed(item("1", price=None)),  # the main feed lists it without a price...
+            dealnews.ELECTRONICS_FEED: feed(item("1", price="499.00")),  # ...the Electronics feed with one
+        }
+        electronics_done = threading.Event()
+
+        def fetch(url: str) -> bytes:
+            if url == dealnews.MAIN_FEED:
+                assert electronics_done.wait(5)  # the main feed answers last
+            body = bodies[url]
+            if url == dealnews.ELECTRONICS_FEED:
+                electronics_done.set()
+            return body
+
+        monkeypatch.setattr(feeds.dealnews, "fetch", fetch)
+        monkeypatch.setattr(feeds, "datetime", type("D", (datetime,), {"now": classmethod(lambda cls, tz=None: NOW)}))
+        feeds.handler({}, None)
+        assert deals_of(table)[0]["price"] == Decimal("499.00") and len(pushes) == 1
