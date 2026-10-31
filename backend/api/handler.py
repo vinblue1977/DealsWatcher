@@ -7,6 +7,7 @@ import boto3
 
 from api import rules, settings, watches
 from api.http import json_response, parse_object, query_items, valid_zone, view
+from feeds import status
 from push.notify import device_key, devices, notify
 from push.webpush import allowed_endpoint
 
@@ -33,6 +34,9 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         return rules.route(table, user, route, item_id, event.get("body"))
     if route.partition(" ")[2] == "/me/settings":
         return settings.route(table, user, route, event.get("body"))
+    if route == "GET /me/status":
+        item = table.get_item(Key=status.KEY).get("Item")  # one shared item, no user's data
+        return json_response(200, view(item) if item else {"checkedAt": None})
     if route == "GET /me/deals":
         found = sorted(query_items(table, user, "DEAL#"), key=lambda d: str(d.get("publishedAt", "")), reverse=True)[:MAX_DEALS]
         return json_response(200, {"deals": [{**view(d), "id": d["SK"]} for d in found]})  # id: a stable key for the app

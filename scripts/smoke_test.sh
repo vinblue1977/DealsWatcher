@@ -66,7 +66,7 @@ fi
 routes=(
   "GET /me/watches" "POST /me/watches" "GET /me/watches/abc" "PUT /me/watches/abc" "DELETE /me/watches/abc"
   "GET /me/rules" "POST /me/rules" "PUT /me/rules/abc" "DELETE /me/rules/abc"
-  "GET /me/deals" "GET /me/settings" "PUT /me/settings"
+  "GET /me/deals" "GET /me/settings" "PUT /me/settings" "GET /me/status"
   "POST /me/push/status" "PUT /me/push" "DELETE /me/push" "POST /me/push/test"
 )
 for route in "${routes[@]}"; do

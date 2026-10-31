@@ -64,3 +64,10 @@ export interface Settings {
   quietHours: QuietHours | null;
   timeZone: string | null; // the zone the checker uses; set when notifications are turned on
 }
+
+export interface CheckerStatus {
+  checkedAt: string | null; // null until the checker has run
+  feedsRead?: number;
+  feedsFailed?: number;
+  feedsSkipped?: number;
+}
