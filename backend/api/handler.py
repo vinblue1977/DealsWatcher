@@ -2,12 +2,11 @@
 
 import os
 from typing import Any
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import boto3
 
-from api import rules, watches
-from api.http import json_response, parse_object, query_items, view
+from api import rules, settings, watches
+from api.http import json_response, parse_object, query_items, valid_zone, view
 from push.notify import device_key, devices, notify
 from push.webpush import allowed_endpoint
 
@@ -32,22 +31,14 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         return watches.route(table, user, route, item_id, event.get("body"))
     if route.partition(" ")[2].startswith("/me/rules"):
         return rules.route(table, user, route, item_id, event.get("body"))
+    if route.partition(" ")[2] == "/me/settings":
+        return settings.route(table, user, route, event.get("body"))
     if route == "GET /me/deals":
         found = sorted(query_items(table, user, "DEAL#"), key=lambda d: str(d.get("publishedAt", "")), reverse=True)[:MAX_DEALS]
         return json_response(200, {"deals": [{**view(d), "id": d["SK"]} for d in found]})  # id: a stable key for the app
     if route in ("POST /me/push/status", "PUT /me/push", "DELETE /me/push", "POST /me/push/test"):
         return _push(table, user, route, event)
     return json_response(404, {"error": "not found"})
-
-
-def _valid_zone(zone: Any) -> str | None:
-    if not isinstance(zone, str) or len(zone) > 64:
-        return None
-    try:
-        ZoneInfo(zone)
-    except ZoneInfoNotFoundError, ValueError, OSError:  # OSError: names like "Europe" are directories, not zones
-        return None
-    return zone
 
 
 def _push(table: Any, user: str, route: str, event: dict[str, Any]) -> dict[str, Any]:
@@ -77,7 +68,7 @@ def _push(table: Any, user: str, route: str, event: dict[str, Any]) -> dict[str,
     keys = data.get("keys")
     if not (isinstance(keys, dict) and all(isinstance(keys.get(k), str) and 0 < len(keys[k]) <= 200 for k in ("p256dh", "auth"))):
         return json_response(400, {"error": "subscription keys missing"})
-    zone = _valid_zone(data.get("timeZone"))
+    zone = valid_zone(data.get("timeZone"))
     if len(devices(table, user)) >= MAX_DEVICES and "Item" not in table.get_item(Key=key):
         return json_response(400, {"error": f"up to {MAX_DEVICES} devices"})
     table.put_item(Item={**key, "subscription": {"endpoint": endpoint, "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]}}})

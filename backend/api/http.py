@@ -3,6 +3,7 @@
 import json
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from boto3.dynamodb.conditions import Key
 
@@ -73,3 +74,13 @@ def query_items(table: Any, user: str, prefix: str) -> list[dict[str, Any]]:
         if "LastEvaluatedKey" not in page:
             return found
         kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+
+
+def valid_zone(zone: Any) -> str | None:
+    if not isinstance(zone, str) or len(zone) > 64:
+        return None
+    try:
+        ZoneInfo(zone)
+    except ZoneInfoNotFoundError, ValueError, OSError:  # OSError: names like "Europe" are directories, not zones
+        return None
+    return zone

@@ -54,3 +54,13 @@ export interface Deal {
   retailer?: string;
   publishedAt?: string;
 }
+
+export interface QuietHours {
+  start: number; // hour of the day, 0-23, in the device's time zone
+  end: number;
+}
+
+export interface Settings {
+  quietHours: QuietHours | null;
+  timeZone: string | null; // the zone the checker uses; set when notifications are turned on
+}

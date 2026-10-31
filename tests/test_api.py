@@ -426,3 +426,45 @@ def test_every_route_refuses_a_request_without_a_signed_in_user() -> None:
         "PUT /me/push",
     ):
         assert call(route, {}, user=None)[0] == 401
+
+
+def test_quiet_hours_are_saved_read_and_cleared(table: Any) -> None:
+    assert call("GET /me/settings")[1] == {"quietHours": None, "timeZone": None}
+    status, body = call("PUT /me/settings", {"quietHours": {"start": 22, "end": 7}, "timeZone": "America/Chicago"})
+    assert (status, body) == (200, {"quietHours": {"start": 22, "end": 7}, "timeZone": "America/Chicago"})
+    assert call("GET /me/settings")[1] == body
+    assert call("GET /me/settings", user=OTHER)[1] == {"quietHours": None, "timeZone": None}  # each user has their own
+    assert call("PUT /me/settings", {"quietHours": None})[1] == {"quietHours": None, "timeZone": "America/Chicago"}
+    item = table.get_item(Key={"PK": f"USER#{USER}", "SK": "PROFILE"})["Item"]
+    assert "quietStart" not in item and "quietEnd" not in item
+
+
+def test_quiet_hours_can_be_set_without_a_zone_and_a_bad_zone_is_ignored() -> None:
+    assert call("PUT /me/settings", {"quietHours": {"start": 0, "end": 23}, "timeZone": "Mars/Base"})[1] == {
+        "quietHours": {"start": 0, "end": 23},
+        "timeZone": None,
+    }
+
+
+BAD_QUIET_HOURS = [
+    {},
+    {"quietHours": 5},
+    {"quietHours": {"start": 22}},
+    {"quietHours": {"start": 7, "end": 7}},
+    {"quietHours": {"start": 24, "end": 1}},
+    {"quietHours": {"start": -1, "end": 1}},
+    {"quietHours": {"start": "22", "end": 7}},
+    {"quietHours": {"start": True, "end": 7}},
+    {"quietHours": {"start": 22.5, "end": 7}},
+    [1],
+]
+
+
+@pytest.mark.parametrize("bad", BAD_QUIET_HOURS)
+def test_bad_quiet_hours_are_rejected(bad: Any) -> None:
+    assert call("PUT /me/settings", bad)[0] == 400
+    assert call("GET /me/settings")[1]["quietHours"] is None
+
+
+def test_settings_need_a_signed_in_user() -> None:
+    assert call("GET /me/settings", user=None)[0] == 401

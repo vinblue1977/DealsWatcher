@@ -5,9 +5,10 @@ import os
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import boto3
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Attr, Key
 
 from feeds import dealnews
 from feeds.matching import matches
@@ -22,6 +23,7 @@ KEEP_DAYS = 30
 PAUSE_SECONDS = 1  # between feed requests: a few small requests, spaced out, every 30 minutes
 READ_BUDGET_SECONDS = 40  # past this, the remaining extra feeds are skipped so a slow host cannot eat the whole run
 MAX_PUSHES = 5  # per user per run; deals over the cap stay unsent and go out on the next run
+MAX_HELD_HOURS = 24  # an alert held back (quiet hours, the cap, a failed push) is dropped once its deal is this old
 
 
 def _read_feeds() -> tuple[list[dict[str, Any]], list[str]]:
@@ -80,6 +82,45 @@ def _rules_by_user(table: Any) -> dict[str, list[dict[str, Any]]]:
     return found
 
 
+def _is_quiet(table: Any, user: str, now: datetime) -> bool:
+    """True while it is inside the user's quiet hours in their time zone (a window like 22 to 7 crosses midnight).
+
+    Not quiet when no window or zone is set. A profile that cannot be read is logged and treated as not quiet, so an alert
+    is never lost to a read failure.
+    """
+    try:
+        profile = table.get_item(Key={"PK": f"USER#{user}", "SK": "PROFILE"}).get("Item") or {}
+        if profile.get("quietStart") is None or profile.get("quietEnd") is None or not profile.get("timeZone"):
+            return False
+        start, end = int(profile["quietStart"]), int(profile["quietEnd"])
+        hour = now.astimezone(ZoneInfo(profile["timeZone"])).hour
+    except Exception:
+        log.exception("quiet hours could not be read")
+        return False
+    return start <= hour < end if start < end else hour >= start or hour < end
+
+
+def _held(table: Any, user: str, now: datetime, skip: set[str], limit: int, keywords: set[str]) -> list[dict[str, Any]]:
+    """This user's stored deals whose alert has not gone out, newest first (at most `limit`), except those in `skip` and those
+    whose keyword the user has since deleted or turned off (`keywords`: the enabled ones, case-folded)."""
+    if limit <= 0:
+        return []
+    found: list[dict[str, Any]] = []
+    oldest = (now - timedelta(hours=MAX_HELD_HOURS)).isoformat()
+    kwargs: dict[str, Any] = {
+        "KeyConditionExpression": Key("PK").eq(f"USER#{user}") & Key("SK").begins_with("DEAL#"),
+        "FilterExpression": Attr("pushed").eq(False) & Attr("publishedAt").gte(oldest),
+        "ConsistentRead": True,  # a deal marked sent a moment ago must not come back as unsent
+    }
+    while True:
+        page = table.query(**kwargs)
+        found += [i for i in page["Items"] if i["SK"] not in skip and str(i.get("keyword", "")).casefold() in keywords]
+        if "LastEvaluatedKey" not in page:
+            break
+        kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+    return sorted(found, key=lambda i: i["publishedAt"], reverse=True)[:limit]
+
+
 def _claim(table: Any, user: str, deal: dict[str, Any], rule: dict[str, Any], now: datetime) -> tuple[dict[str, str], str]:
     """Stores the deal for the user. Returns its key and "new" (just stored), "retry" (stored earlier but its alert never went
     out) or "done" (stored and alerted).
@@ -118,6 +159,8 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
     saved = pushed = failed = matched = already_sent = 0
     for user, rules in _rules_by_user(table).items():
         attempts = 0
+        sent_keys: set[str] = set()
+        quiet = _is_quiet(table, user, now)  # quiet: deals are still saved, their alerts wait for the window to end
         for deal in deals:
             rule = next((r for r in rules if matches(r, deal, SOURCE)), None)
             if rule is None:
@@ -127,13 +170,30 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
                 key, state = _claim(table, user, deal, rule, now)
                 saved += state == "new"
                 already_sent += state == "done"
-                if state == "done" or attempts >= MAX_PUSHES:
-                    continue  # over the cap: stays unsent, goes out on a later run
+                if state == "done" or quiet or attempts >= MAX_PUSHES:
+                    continue  # quiet or over the cap: stays unsent, goes out on a later run
                 attempts += 1  # counted even if it fails, so a broken push path can't bypass the cap
+                sent_keys.add(key["SK"])
                 pushed += notify(table, user, f"New deal: {rule['keyword']}", deal["title"], "/#/deals", strict=True)
                 table.update_item(Key=key, UpdateExpression="SET pushed = :yes", ExpressionAttributeValues={":yes": True})
             except Exception:
                 log.exception("deal alert failed")
+                failed += 1
+        if quiet:
+            continue
+        try:  # alerts held back earlier (quiet hours ended, or the deal has since left the feed) go out now, newest first
+            held = _held(table, user, now, sent_keys, MAX_PUSHES - attempts, {r["keyword"].casefold() for r in rules})
+        except Exception:
+            log.exception("held alerts could not be read")
+            failed += 1
+            continue
+        for old in held:
+            try:
+                pushed += notify(table, user, f"New deal: {old['keyword']}", old["title"], "/#/deals", strict=True)
+                held_key = {"PK": old["PK"], "SK": old["SK"]}
+                table.update_item(Key=held_key, UpdateExpression="SET pushed = :yes", ExpressionAttributeValues={":yes": True})
+            except Exception:
+                log.exception("held deal alert failed")
                 failed += 1
     log.info(
         "deals: %d read, %d recent, %d matched (%d new, %d already sent), %d pushed, %d failed",

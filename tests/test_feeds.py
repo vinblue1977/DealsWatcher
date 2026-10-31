@@ -629,3 +629,85 @@ class TestBlackFridayFeed:
         add_rule(table, keyword="Carhartt")
         assert run(monkeypatch, black_friday=(self.sale(minutes_ago=60 * 24 * 7),))["saved"] == 0  # posted a week ago
         assert pushes == []
+
+
+class TestQuietHours:
+    """NOW is 07:00 in Chicago (daylight time, UTC-5) and 12:00 UTC."""
+
+    def profile(self, table: Any, start: int | None, end: int | None, zone: str | None = "America/Chicago") -> None:
+        values = {"quietStart": start, "quietEnd": end, "timeZone": zone}
+        table.put_item(Item={"PK": f"USER#{USER}", "SK": "PROFILE", **{k: v for k, v in values.items() if v is not None}})
+
+    @pytest.mark.parametrize(
+        ("start", "end", "zone", "quiet"),
+        [
+            (22, 8, "America/Chicago", True),  # 07:00 is inside 22:00-08:00 (crosses midnight)
+            (22, 7, "America/Chicago", False),  # the window ends at 07:00 sharp
+            (6, 8, "America/Chicago", True),  # a window inside one day
+            (8, 22, "America/Chicago", False),
+            (22, 8, "UTC", False),  # 12:00 UTC: the user's own zone decides
+            (22, 8, None, False),  # no zone known: never hold alerts
+            (None, None, "America/Chicago", False),
+        ],
+    )
+    def test_the_window_is_read_in_the_users_time_zone(
+        self, table: Any, start: int | None, end: int | None, zone: str | None, quiet: bool
+    ) -> None:
+        self.profile(table, start, end, zone)
+        assert feeds._is_quiet(table, USER, NOW) is quiet
+
+    def test_alerts_wait_for_the_window_to_end_even_past_the_six_hour_limit(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="OLED")
+        self.profile(table, 22, 8)
+        assert run(monkeypatch, item("1"))["pushed"] == 0 and pushes == []
+        assert len(deals_of(table)) == 1 and deals_of(table)[0]["pushed"] is False  # saved, so the Deals list still shows it
+        assert run(monkeypatch, item("1"))["pushed"] == 0  # still quiet
+        self.profile(table, 22, 7)  # the window has ended
+        assert run(monkeypatch)["pushed"] == 1 and len(pushes) == 1  # the deal has left the feed: it still goes out
+        assert run(monkeypatch)["pushed"] == 0
+
+    def test_held_alerts_share_the_per_run_cap(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="TV")
+        monkeypatch.setattr(feeds, "MAX_PUSHES", 2)
+        self.profile(table, 22, 8)
+        run(monkeypatch, *(item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(4)))
+        self.profile(table, 22, 7)
+        assert run(monkeypatch)["pushed"] == 2 and run(monkeypatch)["pushed"] == 2 and run(monkeypatch)["pushed"] == 0
+        assert len({p[2] for p in pushes}) == 4
+
+    def test_a_deal_held_more_than_a_day_is_dropped(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        table.put_item(
+            Item={
+                "PK": f"USER#{USER}",
+                "SK": "DEAL#old",
+                "title": "Old TV",
+                "keyword": "TV",
+                "pushed": False,
+                "publishedAt": (NOW - timedelta(hours=25)).isoformat(),
+            }
+        )
+        add_rule(table, keyword="OLED")
+        assert run(monkeypatch)["pushed"] == 0 and pushes == []
+
+    def test_only_the_user_in_quiet_hours_is_held(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, USER, keyword="OLED")
+        add_rule(table, OTHER, keyword="OLED")
+        self.profile(table, 22, 8)
+        run(monkeypatch, item("1"))
+        assert [p[0] for p in pushes] == [OTHER]
+
+    def test_a_held_alert_is_dropped_if_its_keyword_was_deleted_or_turned_off(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_rule(table, keyword="OLED")
+        self.profile(table, 22, 8)
+        run(monkeypatch, item("1"))
+        table.update_item(
+            Key={"PK": f"USER#{USER}", "SK": "RULE#r1"},
+            UpdateExpression="SET enabled = :no",
+            ExpressionAttributeValues={":no": False},
+        )
+        self.profile(table, 22, 7)
+        assert run(monkeypatch)["pushed"] == 0 and pushes == []

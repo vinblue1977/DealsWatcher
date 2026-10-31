@@ -33,6 +33,8 @@ describe('api client', () => {
     ['addRule', () => api.addRule({ keyword: 'OLED' }), 'POST', '/me/rules', { keyword: 'OLED' }],
     ['editRule', () => api.editRule('r1', { enabled: false }), 'PUT', '/me/rules/r1', { enabled: false }],
     ['editRule (any price)', () => api.editRule('r1', { maxPrice: null }), 'PUT', '/me/rules/r1', { maxPrice: null }], // null must reach the API, not be dropped
+    ['saveQuietHours', () => api.saveQuietHours({ start: 22, end: 7 }, 'America/Chicago'), 'PUT', '/me/settings', { quietHours: { start: 22, end: 7 }, timeZone: 'America/Chicago' }],
+    ['saveQuietHours (off)', () => api.saveQuietHours(null, 'America/Chicago'), 'PUT', '/me/settings', { quietHours: null, timeZone: 'America/Chicago' }], // null must reach the API
     ['deleteRule', () => api.deleteRule('r1'), 'DELETE', '/me/rules/r1', undefined],
     ['pushOff', () => api.pushOff('https://web.push.apple.com/x'), 'DELETE', '/me/push', { endpoint: 'https://web.push.apple.com/x' }],
     ['pushTest', () => api.pushTest('https://web.push.apple.com/x'), 'POST', '/me/push/test', { endpoint: 'https://web.push.apple.com/x' }],
@@ -45,11 +47,13 @@ describe('api client', () => {
     expect(init.body === undefined ? undefined : JSON.parse(init.body as string)).toEqual(body);
   });
 
-  it('reads single items, rules, deals and push status', async () => {
-    fetchMock.mockImplementation(async () => json({ id: 'w1', rules: [1], deals: [2], devices: 1, thisDevice: true }));
+  it('reads single items, rules, deals, settings and push status', async () => {
+    fetchMock.mockImplementation(async () => json({ quietHours: null, id: 'w1', rules: [1], deals: [2], devices: 1, thisDevice: true }));
     await expect(api.watch('w1')).resolves.toMatchObject({ id: 'w1' });
     await expect(api.rules()).resolves.toEqual([1]);
     await expect(api.deals()).resolves.toEqual([2]);
+    await expect(api.settings()).resolves.toMatchObject({ quietHours: null });
+    expect(lastCall()[0]).toBe('https://api.test/me/settings');
     await expect(api.pushStatus('https://x/a b')).resolves.toMatchObject({ thisDevice: true });
     const [url, init] = lastCall();
     expect(url).toBe('https://api.test/me/push/status'); // the endpoint is a secret: in the body, never in the URL
