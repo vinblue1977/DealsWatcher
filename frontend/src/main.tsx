@@ -8,6 +8,13 @@ import { initPush } from './push';
 import './styles.css';
 
 async function start(root: HTMLElement) {
+  // Never leave the page empty: this shows while settings load and while the sign-in redirect is under way.
+  render(
+    <main class="screen">
+      <p class="muted">Loading…</p>
+    </main>,
+    root,
+  );
   try {
     const config = await loadConfig();
     initApi(config);
@@ -31,6 +38,12 @@ async function start(root: HTMLElement) {
     );
   }
 }
+
+// Coming back to a page the browser kept in memory (Back from the sign-in page, a restored Home Screen app) would show
+// whatever was on screen when it was left, which can be nothing: start over instead.
+addEventListener('pageshow', (e) => {
+  if (e.persisted) location.reload();
+});
 
 const root = document.getElementById('app');
 if (root) void start(root);
