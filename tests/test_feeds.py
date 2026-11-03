@@ -146,9 +146,15 @@ class TestFetch:
             "https://www.dealnews.com/c39/Computers/?rss=1",
             "https://www.dealnews.com/c202/Clothing-Accessories/?rss=1",
             "https://www.dealnews.com/c196/Home-Garden/?rss=1",
+            "https://www.dealnews.com/s321/Walmart/?rss=1",
+            "https://www.dealnews.com/s318/Target/?rss=1",
+            "https://www.dealnews.com/s897/Costco/?rss=1",
+            "https://www.dealnews.com/s560/Best-Buy/?rss=1",
         )
         assert len(set(dealnews.FEEDS)) == len(dealnews.FEEDS)
-        assert dealnews.REQUIRED == (dealnews.MAIN_FEED,)  # the seven extras may fail without turning the checker red
+        assert dealnews.REQUIRED == (dealnews.MAIN_FEED,)  # the eleven extras may fail without turning the checker red
+        assert feeds.START_GAP_SECONDS >= 2  # Dealnews's robots.txt: Crawl-delay: 2
+        assert (len(dealnews.FEEDS) - 1) * feeds.START_GAP_SECONDS < feeds.READ_BUDGET_SECONDS  # every feed gets to start
 
     def test_only_the_listed_feeds_can_be_fetched(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(dealnews._OPENER, "open", lambda *a, **k: pytest.fail("must not make a request"))  # noqa: SLF001
