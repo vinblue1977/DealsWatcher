@@ -35,9 +35,12 @@ def devices(table: Any, user: str) -> list[dict[str, Any]]:
         kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
 
-def notify(table: Any, user: str, title: str, body: str, url: str = "/", only: str | None = None, strict: bool = False) -> int:
+def notify(
+    table: Any, user: str, title: str, body: str, url: str = "/", only: str | None = None, strict: bool = False, count: int = 1
+) -> int:
     """Returns how many devices it reached; expired subscriptions are removed. `only`: one device's sort key (PUSH#...).
 
+    `count`: how many deals this push stands for; the app adds it to the number on its icon.
     `strict`: raise when there were devices to try but every send failed (not just expired), so a caller can retry later.
     """
     sent = failed = 0
@@ -51,7 +54,12 @@ def notify(table: Any, user: str, title: str, body: str, url: str = "/", only: s
     key = _private_key()  # outside the loop: a missing or unreadable signing key must fail loudly, not look like "sent 0"
     for device in mine:
         try:
-            send(device["subscription"], {"title": title, "body": body, "url": url}, key, os.environ["VAPID_SUBJECT"])
+            send(
+                device["subscription"],
+                {"title": title, "body": body, "url": url, "count": count},
+                key,
+                os.environ["VAPID_SUBJECT"],
+            )
             sent += 1
         except Gone:
             table.delete_item(Key={"PK": device["PK"], "SK": device["SK"]})

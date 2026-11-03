@@ -16,8 +16,12 @@ function load(windows: { url: string; visibilityState: string; focus: () => Prom
     registration: { showNotification: async (title: string, options: never) => void shown.push({ title, options }) },
     location: { origin: 'https://app.test' },
   };
-  new Function('self', worker)(scope); // eslint-disable-line no-new-func
-  return { handlers, shown, opened };
+  const store = new Map<string, string>();
+  const badge: number[] = [];
+  const caches = { open: async () => ({ match: async (k: string) => (store.has(k) ? new Response(store.get(k)) : undefined), put: async (k: string, r: Response) => void store.set(k, await r.text()) }) };
+  Object.assign(scope, { navigator: { setAppBadge: async (n: number) => void badge.push(n) }, caches });
+  new Function('self', 'caches', worker)(scope, caches); // eslint-disable-line no-new-func
+  return { handlers, shown, opened, badge };
 }
 
 const push = (payload: unknown) => {
@@ -65,6 +69,18 @@ describe('service worker', () => {
   });
 });
 
+
+describe('app icon badge', () => {
+  it('adds up what each push covers', async () => {
+    const { handlers, badge } = load();
+    for (const payload of [{}, { count: 12 }, { count: -3 }, { count: 'x' }, { count: 1.5 }]) {
+      const p = push(payload);
+      handlers['push']?.(p.event);
+      await p.done();
+    }
+    expect(badge).toEqual([1, 13, 14, 15, 16]);
+  });
+});
 
 describe('tapping a notification when the app is open', () => {
   const tap = async (handlers: Record<string, Handler>, url: string) => {
