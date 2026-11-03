@@ -22,6 +22,12 @@ ELECTRONICS_FEED = "https://www.dealnews.com/c142/Electronics/?rss=1"
 COMPUTERS_FEED = "https://www.dealnews.com/c39/Computers/?rss=1"
 CLOTHING_FEED = "https://www.dealnews.com/c202/Clothing-Accessories/?rss=1"
 HOME_GARDEN_FEED = "https://www.dealnews.com/c196/Home-Garden/?rss=1"
+# One store each: nearly all of their deals are ones the main feed has already scrolled past (a test on 2026-11-03 found 18-23 of
+# 20-23 per feed not in the main feed). These are the stores the owner wants Black Friday deals from.
+WALMART_FEED = "https://www.dealnews.com/s321/Walmart/?rss=1"
+TARGET_FEED = "https://www.dealnews.com/s318/Target/?rss=1"
+COSTCO_FEED = "https://www.dealnews.com/s897/Costco/?rss=1"
+BEST_BUY_FEED = "https://www.dealnews.com/s560/Best-Buy/?rss=1"
 FEEDS = (
     MAIN_FEED,
     BLACK_FRIDAY_FEED,
@@ -31,6 +37,10 @@ FEEDS = (
     COMPUTERS_FEED,
     CLOTHING_FEED,
     HOME_GARDEN_FEED,
+    WALMART_FEED,
+    TARGET_FEED,
+    COSTCO_FEED,
+    BEST_BUY_FEED,
 )
 REQUIRED = (MAIN_FEED,)  # the others are extras (Black Friday is seasonal): if one fails, that is logged, not an error
 USER_AGENT = "DealsWatcher/1.0 (personal deal alerts; +https://github.com/vinblue1977/DealsWatcher)"

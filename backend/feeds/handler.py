@@ -25,7 +25,7 @@ SOURCE = "dealnews"
 MAX_AGE_HOURS = 6  # a first run, or a long outage, must not alert on old deals
 KEEP_DAYS = 30
 MAX_WORKERS = 3  # feeds read at the same time
-START_GAP_SECONDS = 0.5  # between the starts of two requests: a few small requests, spaced out, every 30 minutes
+START_GAP_SECONDS = 2.0  # between the starts of two requests: Dealnews's robots.txt asks for "Crawl-delay: 2"
 READ_BUDGET_SECONDS = 40  # past this, the extra feeds that have not started are skipped so a slow host cannot eat the whole run
 DIGEST_OVER = 3  # more alerts than this waiting for one user go out as one summary push, not one push each
 MAX_HELD_HOURS = 24  # an alert held back (quiet hours, a failed push) is dropped once its deal is this old
@@ -37,9 +37,9 @@ def _read_feeds() -> tuple[list[dict[str, Any]], list[str], tuple[int, int, int]
 
     The feeds are read a few at a time (MAX_WORKERS), and each request starts at least START_GAP_SECONDS after the one before,
     so Dealnews sees a few small requests, not a burst. One feed being down must not hide the others' deals. If every feed
-    fails, the first error (in FEEDS order) is raised. A failing extra feed (Black Friday, popular, editors', categories) is
-    only logged, so it cannot keep the checker permanently red. Once the read budget is spent the extras that have not started
-    are skipped (logged), so a slow host cannot use up the run.
+    fails, the first error (in FEEDS order) is raised. A failing extra feed (Black Friday, popular, editors', categories, stores)
+    is only logged, so it cannot keep the checker permanently red. Once the read budget is spent the extras that have not
+    started are skipped (logged), so a slow host cannot use up the run.
     """
     started = time.monotonic()
     gate = threading.Lock()  # one request starts at a time
