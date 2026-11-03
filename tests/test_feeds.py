@@ -468,6 +468,13 @@ class TestHandler:
         run(monkeypatch, *(item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(4)))
         assert sorted(p[0] for p in pushes) == sorted([OTHER, USER]) and {p[1] for p in pushes} == {"4 new deals"}
 
+    def test_the_summary_tells_the_app_how_many_deals_it_covers(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="TV")
+        counts: list[int] = []
+        monkeypatch.setattr(feeds, "notify", lambda *a, **kw: counts.append(kw.get("count", 1)) or 1)
+        run(monkeypatch, *(item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(5)))
+        assert counts == [5]
+
     def test_the_boundary_is_more_than_the_limit(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
         add_rule(table, keyword="TV")
         run(monkeypatch, *(item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(feeds.DIGEST_OVER + 1)))

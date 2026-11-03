@@ -257,7 +257,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
             unsent = _unsent(table, user, now, {r["keyword"].casefold() for r in rules})
             if len(unsent) > DIGEST_OVER:  # a flood (Black Friday, or a quiet window just ended): one push, not dozens
                 title, body = _digest(unsent)
-                pushed += notify(table, user, title, body, "/#/deals", strict=True)
+                pushed += notify(table, user, title, body, "/#/deals", strict=True, count=len(unsent))
                 for waiting in unsent:  # the push is out: one write failing must not leave the rest to be sent again
                     try:
                         _mark_sent(table, waiting)

@@ -88,3 +88,13 @@ def test_notify_can_target_one_device(table: Any, monkeypatch: pytest.MonkeyPatc
 def test_notify_only_reaches_nobody_when_that_device_is_gone(table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(push, "_private_key", lambda: "key")
     assert push.notify(table, "u", "Hi", "Body", only=push.device_key("https://web.push.apple.com/none")) == 0
+
+
+def test_the_payload_carries_how_many_deals_it_stands_for(table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    messages: list[dict] = []
+    monkeypatch.setattr(push, "_private_key", lambda: "k")
+    monkeypatch.setattr(push, "send", lambda subscription, message, *a, **k: messages.append(message))
+    table.put_item(Item={"PK": "USER#u", "SK": push.device_key("d"), "subscription": {"endpoint": "d"}})
+    push.notify(table, "u", "t", "b")
+    push.notify(table, "u", "t", "b", count=7)
+    assert [m["count"] for m in messages] == [1, 7]

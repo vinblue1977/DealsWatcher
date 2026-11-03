@@ -4,6 +4,7 @@ import { App } from './App';
 import { initApi } from './api';
 import { addPasskeyUrl, currentEmail, initAuth, keepFresh, logout } from './auth';
 import { loadConfig } from './config';
+import { clearBadge } from './badge';
 import { initPush } from './push';
 import './styles.css';
 
@@ -21,6 +22,8 @@ async function start(root: HTMLElement) {
     initPush(config);
     if (!(await initAuth(config))) return; // redirected to the sign-in page
     keepFresh();
+    clearBadge(); // the person is looking at the app: nothing is unseen
+    addEventListener('visibilitychange', () => document.visibilityState === 'visible' && clearBadge());
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => undefined); // push is optional: the app works without it
       navigator.serviceWorker.addEventListener('message', (e) => {
