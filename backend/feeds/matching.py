@@ -47,6 +47,14 @@ def parse_keyword(keyword: str) -> Terms | None:
     return Terms(tuple(wanted), tuple(unwanted)) if wanted else None
 
 
+_EXCLUSION = re.compile(r'-"[^"]*"|(?<!\S)-[^\W\d_]\S*')
+
+
+def label(keyword: str) -> str:
+    """A keyword as people read it: without its `-exclusions` and quote marks (`TV -mount "Pro Max"` reads `TV Pro Max`)."""
+    return " ".join(_EXCLUSION.sub("", keyword).replace('"', "").split()) or keyword
+
+
 def same_keyword(a: str, b: str) -> bool:
     """Two keywords that ask for the same thing (case, spacing, quote style and the order of terms don't matter)."""
     ta, tb = parse_keyword(a), parse_keyword(b)

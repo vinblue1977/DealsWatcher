@@ -1065,3 +1065,171 @@ class TestTitlePrice:
         deal = dealnews.parse(feed(item("1", price=None, title="Apple AirPods Pro 3 for $199")))[0]
         assert matches(rule(maxPrice=Decimal("250")), deal, "dealnews")
         assert not matches(rule(maxPrice=Decimal("150")), deal, "dealnews")
+
+
+def add_product(table: Any, user: str = USER, pid: str = "p1", name: str = "Sony WH-1000XM5", **over: Any) -> None:
+    table.put_item(
+        Item={
+            "PK": f"USER#{user}",
+            "SK": f"WATCH#{pid}",
+            "id": pid,
+            "name": name,
+            "title": name,
+            "targetPrice": None,
+            "alertOnLow": True,
+            "alertOnDrop": True,
+            "paused": False,
+            "createdAt": "2026-10-01T00:00:00Z",
+            **over,
+        }
+    )
+
+
+def product(table: Any, user: str = USER, pid: str = "p1") -> dict[str, Any]:
+    return table.get_item(Key={"PK": f"USER#{user}", "SK": f"WATCH#{pid}"})["Item"]
+
+
+def sightings_of(table: Any, user: str = USER, pid: str = "p1") -> list[dict[str, Any]]:
+    found = [i for i in table.scan()["Items"] if i["PK"] == f"USER#{user}" and i["SK"].startswith(f"SIGHT#{pid}#")]
+    return sorted(found, key=lambda i: i["publishedAt"])
+
+
+def xm5(n: str, price: str | None, minutes_ago: int = 30, **extra: str) -> str:
+    return item(n, title="Sony WH-1000XM5 Headphones", price=price, minutes_ago=minutes_ago, **extra)
+
+
+class TestProducts:
+    def test_the_first_sighting_only_sets_the_price_to_beat(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_product(table)
+        run(monkeypatch, xm5("1", "300.00"))
+        (seen,) = sightings_of(table)
+        assert seen["price"] == Decimal("300.00") and seen["retailer"] == "Best Buy" and seen["newLow"] is True
+        assert seen["pushed"] is True and "alertTitle" not in seen and seen["ttl"] > int(NOW.timestamp())
+        assert product(table)["lowestPrice"] == Decimal("300.00") and product(table)["lowestRetailer"] == "Best Buy"
+        assert pushes == [] and deals_of(table) == []  # no keyword rule: nothing in the Deals tab
+
+    def test_a_lower_price_is_a_new_low_and_alerts(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_product(table, lowestPrice=Decimal("300.00"))
+        run(monkeypatch, xm5("1", "248.00"))
+        assert pushes == [(USER, "New low: Sony WH-1000XM5", "$248.00 at Best Buy", "/#/")]
+        assert product(table)["lowestPrice"] == Decimal("248.00") and sightings_of(table)[0]["pushed"] is True
+
+    def test_an_equal_or_higher_price_is_recorded_without_an_alert(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_product(table, lowestPrice=Decimal("248.00"))
+        run(monkeypatch, xm5("1", "248.00"), xm5("2", "259.99"))
+        assert pushes == [] and [s["newLow"] for s in sightings_of(table)] == [False, False]
+        assert product(table)["lowestPrice"] == Decimal("248.00")
+
+    def test_two_steps_down_in_one_run_alert_on_each(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_product(table, lowestPrice=Decimal("300.00"))
+        run(
+            monkeypatch,
+            xm5("1", "250.00", minutes_ago=20),
+            xm5("2", "270.00", minutes_ago=40),
+            xm5("3", "260.00", minutes_ago=10),
+        )
+        # oldest first: 270 is a low against 300, 250 against 270, and 260 is no low; newest alert first
+        assert [p[2] for p in pushes] == ["$250.00 at Best Buy", "$270.00 at Best Buy"]
+        assert [s["newLow"] for s in sightings_of(table)] == [True, True, False]
+        assert product(table)["lowestPrice"] == Decimal("250.00")
+
+    def test_reaching_your_price_alerts_and_says_so_with_a_new_low(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_product(table, targetPrice=Decimal("260.00"), lowestPrice=Decimal("300.00"))
+        run(monkeypatch, xm5("1", "255.00"))
+        assert pushes == [(USER, "New low: Sony WH-1000XM5", "$255.00 at Best Buy · within your $260.00 price", "/#/")]
+
+    def test_reaching_your_price_without_the_low_alert_switch(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_product(table, targetPrice=Decimal("260.00"), lowestPrice=Decimal("300.00"), alertOnLow=False)
+        run(monkeypatch, xm5("1", "255.00"))
+        assert pushes == [(USER, "Your price: Sony WH-1000XM5", "$255.00 at Best Buy · within your $260.00 price", "/#/")]
+
+    def test_a_first_sighting_within_your_price_alerts(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_product(table, targetPrice=Decimal("260.00"))
+        run(monkeypatch, xm5("1", "255.00"))
+        assert [p[1] for p in pushes] == ["Your price: Sony WH-1000XM5"]
+
+    def test_staying_within_your_price_alerts_only_on_new_lows(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_product(table, targetPrice=Decimal("260.00"), lowestPrice=Decimal("250.00"))
+        run(monkeypatch, xm5("1", "255.00"))  # within the price but not a low, and it was already within it
+        assert pushes == []
+
+    def test_both_switches_off_means_no_alerts(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_product(table, targetPrice=Decimal("260.00"), lowestPrice=Decimal("300.00"), alertOnLow=False, alertOnDrop=False)
+        run(monkeypatch, xm5("1", "200.00"))
+        assert pushes == [] and product(table)["lowestPrice"] == Decimal("200.00")
+
+    def test_running_again_records_and_alerts_nothing_twice(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_product(table, lowestPrice=Decimal("300.00"))
+        run(monkeypatch, xm5("1", "248.00"))
+        run(monkeypatch, xm5("1", "248.00"))
+        assert len(pushes) == 1 and len(sightings_of(table)) == 1
+
+    def test_a_failed_push_is_retried_next_run(self, table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_product(table, lowestPrice=Decimal("300.00"))
+
+        def broken(*a: Any, **k: Any) -> int:
+            raise RuntimeError("push failed on every device")
+
+        monkeypatch.setattr(feeds, "notify", broken)
+        with pytest.raises(RuntimeError):
+            run(monkeypatch, xm5("1", "248.00"))
+        assert sightings_of(table)[0]["pushed"] is False
+        sent: list[str] = []
+        monkeypatch.setattr(feeds, "notify", lambda table, user, title, body, url="/", **kw: sent.append(title) or 1)
+        run(monkeypatch, xm5("1", "248.00"))
+        assert sent == ["New low: Sony WH-1000XM5"] and sightings_of(table)[0]["pushed"] is True
+
+    def test_many_alerts_go_out_as_one_summary(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        for number, name in enumerate(("alpha", "beta", "gamma", "delta")):
+            add_product(table, pid=f"p{number}", name=name, lowestPrice=Decimal("500.00"))
+        run(monkeypatch, item("1", title="alpha beta gamma delta bundle", price="100.00"))
+        assert len(pushes) == 1 and pushes[0][1] == "4 price updates"
+
+    def test_only_matching_priced_deals_of_running_products_count(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_product(table, name="Sony WH-1000XM5 -XM4")
+        add_product(table, pid="p2", name="Sony WH-1000XM5", paused=True)
+        run(
+            monkeypatch,
+            item("1", title="Sony WH-1000XM5 vs XM4", price="200.00"),
+            item("2", title="Sony WH-1000XM5 XM4 bundle", price="100.00"),  # excluded by -XM4
+            item("3", title="Sony WH-1000XM5 Headphones", price=None),  # no price
+            item("4", title="Dyson Vacuum", price="100.00"),
+            item("5", title="Sony WH-1000XM5 Headphones", price="250.00"),
+        )
+        assert [s["price"] for s in sightings_of(table)] == [Decimal("250.00")]  # the priced, matching, not-excluded deal
+        assert sightings_of(table, pid="p2") == []  # paused
+
+    def test_each_user_has_their_own_prices(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_product(table, lowestPrice=Decimal("300.00"))
+        add_product(table, user="someone-else", lowestPrice=Decimal("100.00"))
+        run(monkeypatch, xm5("1", "248.00"))
+        assert [p[0] for p in pushes] == [USER]
+        assert product(table, "someone-else")["lowestPrice"] == Decimal("100.00")
+
+    def test_a_product_deleted_during_the_run_does_not_fail_it(
+        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        add_product(table)
+        real = feeds.products.products_by_user
+
+        def stale(t: Any) -> Any:
+            found = real(t)
+            t.delete_item(Key={"PK": f"USER#{USER}", "SK": "WATCH#p1"})  # deleted after the scan
+            return found
+
+        monkeypatch.setattr(feeds.products, "products_by_user", stale)
+        assert run(monkeypatch, xm5("1", "300.00"))["deals"] == 1

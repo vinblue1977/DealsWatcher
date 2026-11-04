@@ -1,4 +1,5 @@
-"""Product watches: a product link plus a target price. A checker fills in prices later (see ROADMAP.md)."""
+"""Watches. Two kinds: a tracked product (a `name`, like a keyword, and an optional price; the feed checker records its sightings
+and the lowest price seen, see feeds/products.py) and the older product link with a target price (no checker reads those)."""
 
 import hashlib
 import re
@@ -8,8 +9,10 @@ from typing import Any
 from urllib.parse import unquote, urlsplit
 
 from api.http import json_response, parse_object, price, query_items, update_item, view
+from feeds.matching import label, parse_keyword, same_keyword
 
 MAX_WATCHES = 100
+MAX_SIGHTINGS = 100  # shown on a product's screen
 WATCH_ID = re.compile(r"^[0-9a-f]{12}$")
 # Stores we know how to read. Others are refused up front instead of failing silently later.
 RETAILERS = {
@@ -68,19 +71,75 @@ def route(table: Any, user: str, route: str, watch_id: str, body: str | None) ->
     if not item:
         return json_response(404, {"error": "no such watch"})
     if route == "GET /me/watches/{id}":
-        return json_response(200, view(item))
+        if "name" not in item:
+            return json_response(200, view(item))
+        return json_response(200, {**view(item), "sightings": _sightings(table, user, watch_id)})
     if route == "DELETE /me/watches/{id}":
         table.delete_item(Key=key)
+        for sighting in query_items(table, user, f"SIGHT#{watch_id}#"):
+            table.delete_item(Key={"PK": sighting["PK"], "SK": sighting["SK"]})
         return json_response(200, {"deleted": watch_id})
     if route == "PUT /me/watches/{id}":
-        return _update(table, key, body)
+        return _update(table, key, body, product="name" in item)
     return json_response(404, {"error": "not found"})
+
+
+def _sightings(table: Any, user: str, watch_id: str) -> list[dict[str, Any]]:
+    """A product's recorded prices, newest first (the id is the deal's, a stable key for the app)."""
+    found = query_items(table, user, f"SIGHT#{watch_id}#")
+    found.sort(key=lambda i: str(i.get("publishedAt", "")), reverse=True)
+    return [
+        {**{k: v for k, v in view(i).items() if not k.startswith("alert")}, "id": i["SK"].rpartition("#")[2]}
+        for i in found[:MAX_SIGHTINGS]
+    ]
+
+
+def _create_product(table: Any, user: str, data: dict[str, Any]) -> dict[str, Any]:
+    name = data.get("name")
+    if not isinstance(name, str) or not 0 < len(name.strip()) <= 60:
+        return json_response(400, {"error": "name must be 1-60 characters"})
+    if parse_keyword(name) is None:
+        return json_response(
+            400, {"error": 'name needs a word to look for (a word after - is skipped, e.g. XM5 -XM4) and any "phrase" closed'}
+        )
+    target = None
+    if data.get("targetPrice") is not None:  # the price is optional
+        target = price(data["targetPrice"])
+        if target is None:
+            return json_response(400, {"error": "targetPrice must be a positive dollar amount or left out"})
+    flags = {}
+    for flag in ("alertOnLow", "alertOnDrop"):
+        flags[flag] = data.get(flag, True)
+        if not isinstance(flags[flag], bool):
+            return json_response(400, {"error": f"{flag} must be true or false"})
+    existing = query_items(table, user, "WATCH#")
+    if any("name" in w and same_keyword(w["name"], name) for w in existing):
+        return json_response(400, {"error": "you are already tracking this product"})
+    if len(existing) >= MAX_WATCHES:  # a soft cap: two simultaneous adds could slip past it
+        return json_response(400, {"error": f"up to {MAX_WATCHES} watches"})
+    watch_id = uuid.uuid4().hex[:12]
+    item = {
+        "PK": f"USER#{user}",
+        "SK": f"WATCH#{watch_id}",
+        "id": watch_id,
+        "name": name.strip(),
+        "title": label(name.strip()),
+        "targetPrice": target,
+        **flags,
+        "paused": False,
+        "status": "ok",
+        "createdAt": datetime.now(UTC).isoformat(),
+    }
+    table.put_item(Item=item)
+    return json_response(201, view(item))
 
 
 def _create(table: Any, user: str, body: str | None) -> dict[str, Any]:
     data = parse_object(body)
     if data is None:
         return json_response(400, {"error": "body must be a JSON object"})
+    if "name" in data and "url" not in data:
+        return _create_product(table, user, data)
     url = data.get("url")
     retailer = retailer_for(url) if isinstance(url, str) else None
     if not retailer or not isinstance(url, str):
@@ -119,17 +178,17 @@ def _create(table: Any, user: str, body: str | None) -> dict[str, Any]:
     return json_response(201, view(item))
 
 
-def _update(table: Any, key: dict[str, str], body: str | None) -> dict[str, Any]:
+def _update(table: Any, key: dict[str, str], body: str | None, product: bool = False) -> dict[str, Any]:
     data = parse_object(body)
     if data is None:
         return json_response(400, {"error": "body must be a JSON object"})
     changes: dict[str, Any] = {}
     if "targetPrice" in data:
         target = price(data["targetPrice"])
-        if target is None:
+        if target is None and not (product and data["targetPrice"] is None):  # a product's price may be cleared
             return json_response(400, {"error": "targetPrice must be a positive dollar amount"})
         changes["targetPrice"] = target
-    for flag in ("alertOnDrop", "paused"):
+    for flag in ("alertOnDrop", "paused", *(("alertOnLow",) if product else ())):
         if flag in data:
             if not isinstance(data[flag], bool):
                 return json_response(400, {"error": f"{flag} must be true or false"})
