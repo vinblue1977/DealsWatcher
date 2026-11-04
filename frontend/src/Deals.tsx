@@ -3,12 +3,13 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { api } from './api';
 import { CheckerLine } from './CheckerLine';
 import { ago, money, safeLink, sourceName } from './format';
+import { hide, loadHidden, saveHidden, unhide } from './hidden';
 import { markSeen, unseenIds } from './seen';
 import type { Deal, Source } from './types';
 
 const MAX_DEALS = 100; // what the API returns
 
-function Card({ deal, fresh }: { deal: Deal; fresh: boolean }) {
+function Card({ deal, fresh, hidden, onToggle }: { deal: Deal; fresh: boolean; hidden: boolean; onToggle: () => void }) {
   const link = safeLink(deal.url); // feed links are untrusted: https only
   const body = (
     <>
@@ -26,7 +27,7 @@ function Card({ deal, fresh }: { deal: Deal; fresh: boolean }) {
     </>
   );
   return (
-    <li>
+    <li class={hidden ? 'dealrow faded' : 'dealrow'}>
       {link ? (
         <a class="card block" href={link} target="_blank" rel="noopener noreferrer">
           {body}
@@ -34,6 +35,9 @@ function Card({ deal, fresh }: { deal: Deal; fresh: boolean }) {
       ) : (
         <div class="card block">{body}</div>
       )}
+      <button type="button" class="x" aria-label={hidden ? 'Show this deal again' : 'Hide this deal'} onClick={onToggle}>
+        {hidden ? '↩' : '✕'}
+      </button>
     </li>
   );
 }
@@ -44,6 +48,9 @@ export function Deals() {
   const [error, setError] = useState('');
   const [source, setSource] = useState<Source | 'all'>('all');
   const [attempt, setAttempt] = useState(0);
+  const [hiddenIds, setHiddenIds] = useState<string[]>(loadHidden);
+  const [showHidden, setShowHidden] = useState(false);
+  const [undo, setUndo] = useState<string | null>(null);
   const [onlyNew, setOnlyNew] = useState(false);
   const [keyword, setKeyword] = useState('all');
   const [maxPrice, setMaxPrice] = useState('');
@@ -82,12 +89,21 @@ export function Deals() {
     };
   }, [attempt]);
 
+  const change = (next: string[]) => (setHiddenIds(next), saveHidden(next));
+  useEffect(() => {
+    if (undo === null) return;
+    const t = setTimeout(() => setUndo(null), 6000);
+    return () => clearTimeout(t);
+  }, [undo]);
+
   const sources = [...new Set((deals ?? []).flatMap((d) => (d.source ? [d.source] : [])))]; // only feeds that have deals
   const keywordList = [...new Set((deals ?? []).flatMap((d) => (d.keyword ? [d.keyword] : [])))];
   const limit = maxPrice.trim() === '' ? null : Number(maxPrice);
   const priceLimit = limit !== null && Number.isFinite(limit) && limit >= 0 ? limit : null;
+  const hiddenCount = (deals ?? []).filter((d) => hiddenIds.includes(d.id)).length;
   const shown = (deals ?? []).filter(
     (d) =>
+      (showHidden || !hiddenIds.includes(d.id)) &&
       (source === 'all' || d.source === source) &&
       (keyword === 'all' || d.keyword === keyword) &&
       (!onlyNew || fresh.has(d.id)) &&
@@ -183,9 +199,41 @@ export function Deals() {
       )}
       <ul class="list">
         {shown.map((d) => (
-          <Card key={d.id} deal={d} fresh={fresh.has(d.id)} />
+          <Card
+            key={d.id}
+            deal={d}
+            fresh={fresh.has(d.id)}
+            hidden={hiddenIds.includes(d.id)}
+            onToggle={() => {
+              if (hiddenIds.includes(d.id)) return change(unhide(hiddenIds, d.id));
+              change(hide(hiddenIds, d.id));
+              setUndo(d.id);
+            }}
+          />
         ))}
       </ul>
+      {hiddenCount > 0 && (
+        <p class="center">
+          <button type="button" class="textbutton" onClick={() => setShowHidden(!showHidden)}>
+            {showHidden ? 'Hide hidden deals' : `Show ${hiddenCount} hidden ${hiddenCount === 1 ? 'deal' : 'deals'}`}
+          </button>
+        </p>
+      )}
+      {undo !== null && (
+        <div class="undo" role="status">
+          <span>Deal hidden</span>
+          <button
+            type="button"
+            class="textbutton"
+            onClick={() => {
+              change(unhide(hiddenIds, undo));
+              setUndo(null);
+            }}
+          >
+            Undo
+          </button>
+        </div>
+      )}
       {deals && deals.length >= MAX_DEALS && <p class="muted small center">Showing the latest {MAX_DEALS} deals.</p>}
     </main>
   );
