@@ -44,6 +44,9 @@ export function Deals() {
   const [error, setError] = useState('');
   const [source, setSource] = useState<Source | 'all'>('all');
   const [attempt, setAttempt] = useState(0);
+  const [onlyNew, setOnlyNew] = useState(false);
+  const [keyword, setKeyword] = useState('all');
+  const [maxPrice, setMaxPrice] = useState('');
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const ids = useRef<string[]>([]);
 
@@ -80,7 +83,22 @@ export function Deals() {
   }, [attempt]);
 
   const sources = [...new Set((deals ?? []).flatMap((d) => (d.source ? [d.source] : [])))]; // only feeds that have deals
-  const shown = (deals ?? []).filter((d) => source === 'all' || d.source === source);
+  const keywordList = [...new Set((deals ?? []).flatMap((d) => (d.keyword ? [d.keyword] : [])))];
+  const limit = maxPrice.trim() === '' ? null : Number(maxPrice);
+  const priceLimit = limit !== null && Number.isFinite(limit) && limit >= 0 ? limit : null;
+  const shown = (deals ?? []).filter(
+    (d) =>
+      (source === 'all' || d.source === source) &&
+      (keyword === 'all' || d.keyword === keyword) &&
+      (!onlyNew || fresh.has(d.id)) &&
+      (priceLimit === null || (typeof d.price === 'number' && d.price <= priceLimit)), // a deal with no price can't be under a limit
+  );
+  const filtered = source !== 'all' || keyword !== 'all' || onlyNew || priceLimit !== null;
+  const markAllSeen = () => {
+    markSeen(ids.current);
+    setFresh(new Set());
+    setOnlyNew(false);
+  };
   return (
     <main class="screen">
       <header>
@@ -98,6 +116,17 @@ export function Deals() {
         </div>
       )}
 
+      {deals && fresh.size > 0 && (
+        <div class="chips">
+          <button type="button" class={onlyNew ? 'chip on' : 'chip'} aria-pressed={onlyNew} onClick={() => setOnlyNew(!onlyNew)}>
+            New ({fresh.size})
+          </button>
+          <button type="button" class="textbutton" onClick={markAllSeen}>
+            Mark all as seen
+          </button>
+        </div>
+      )}
+
       {deals && sources.length > 1 && (
         <div class="chips">
           {(['all', ...sources] as const).map((id) => (
@@ -105,6 +134,22 @@ export function Deals() {
               {id === 'all' ? 'All' : sourceName(id)}
             </button>
           ))}
+        </div>
+      )}
+
+      {deals && deals.length > 0 && (keywordList.length > 1 || deals.some((d) => typeof d.price === 'number')) && (
+        <div class="filters">
+          {keywordList.length > 1 && (
+            <select class="select" aria-label="Keyword" value={keyword} onChange={(e) => setKeyword(e.currentTarget.value)}>
+              <option value="all">All keywords</option>
+              {keywordList.map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+          )}
+          <input class="select" type="number" inputMode="decimal" min="0" placeholder="Max price" aria-label="Max price" value={maxPrice} onInput={(e) => setMaxPrice(e.currentTarget.value)} />
         </div>
       )}
 
@@ -117,7 +162,25 @@ export function Deals() {
           </a>
         </section>
       )}
-      {deals && deals.length > 0 && shown.length === 0 && <p class="muted center">Nothing from this feed in the latest deals.</p>}
+      {deals && deals.length > 0 && shown.length === 0 && (
+        <p class="muted center">
+          {filtered ? 'No deals match these filters.' : 'Nothing in the latest deals.'}{' '}
+          {filtered && (
+            <button
+              type="button"
+              class="textbutton"
+              onClick={() => {
+                setSource('all');
+                setKeyword('all');
+                setOnlyNew(false);
+                setMaxPrice('');
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+        </p>
+      )}
       <ul class="list">
         {shown.map((d) => (
           <Card key={d.id} deal={d} fresh={fresh.has(d.id)} />
