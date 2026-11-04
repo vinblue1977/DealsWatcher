@@ -9,7 +9,7 @@ const TICK_MS = 60000; // the "x min ago" text and the stale warning are worked 
 
 /** "Checked 12 min ago": proof the deal checker is alive. Shows nothing while loading or if the status can't be read.
  * With a `label` it is a Settings row instead, drawn only once there is something to show. */
-export function CheckerLine({ label }: { label?: string }) {
+export function CheckerLine({ label, reload = 0 }: { label?: string; reload?: number }) {
   const [status, setStatus] = useState<CheckerStatus | null>(null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -30,7 +30,7 @@ export function CheckerLine({ label }: { label?: string }) {
       clearInterval(refresh);
       clearInterval(tick);
     };
-  }, []);
+  }, [reload]); // a changed `reload` loads the status again (the person pressed refresh)
   if (!status) return null;
   const { text, stale } = checkerLine(status, now);
   const tone = stale ? 'warn-text' : 'muted';

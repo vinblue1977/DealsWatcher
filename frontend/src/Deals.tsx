@@ -8,6 +8,7 @@ import { markSeen, unseenIds } from './seen';
 import type { Deal, Source } from './types';
 
 const MAX_DEALS = 100; // what the API returns
+const AWAY_MS = 5 * 60000; // away at least this long: reload the deals on return
 
 function Card({ deal, fresh, hidden, onToggle }: { deal: Deal; fresh: boolean; hidden: boolean; onToggle: () => void }) {
   const link = safeLink(deal.url); // feed links are untrusted: https only
@@ -48,6 +49,8 @@ export function Deals() {
   const [error, setError] = useState('');
   const [source, setSource] = useState<Source | 'all'>('all');
   const [attempt, setAttempt] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const left = useRef(0); // when the app last went to the background
   const [hiddenIds, setHiddenIds] = useState<string[]>(loadHidden);
   const [showHidden, setShowHidden] = useState(false);
   const [undo, setUndo] = useState<string | null>(null);
@@ -67,18 +70,34 @@ export function Deals() {
     };
   }, []);
 
+  // Coming back after a while reloads the deals; a quick look away does not.
+  useEffect(() => {
+    const onChange = () => {
+      if (document.visibilityState === 'hidden') left.current = Date.now();
+      else if (left.current && Date.now() - left.current >= AWAY_MS) setAttempt((n) => n + 1);
+    };
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
+  }, []);
+
   useEffect(() => {
     let live = true;
-    api.deals().then(
-      (found) => {
-        if (!live) return;
-        if (ids.current.length === 0) setFresh(unseenIds(found.map((d) => d.id))); // a retry or refresh keeps the first answer
-        ids.current = found.map((d) => d.id);
-        setDeals(found);
-        setError('');
-      },
-      (e: Error) => live && setError(e.message),
-    );
+    setLoading(true);
+    api
+      .deals()
+      .then(
+        (found) => {
+          if (!live) return;
+          const foundIds = found.map((d) => d.id);
+          if (ids.current.length === 0) setFresh(unseenIds(foundIds));
+          else setFresh((was) => new Set([...was, ...foundIds.filter((id) => !ids.current.includes(id))])); // arrived while the app was open
+          ids.current = foundIds;
+          setDeals(found);
+          setError('');
+        },
+        (e: Error) => live && setError(e.message),
+      )
+      .finally(() => live && setLoading(false));
     // The keyword count is a nicety: if it fails the deals still show.
     api.rules().then(
       (rules) => live && setKeywords(rules.filter((r) => r.enabled).length),
@@ -118,9 +137,16 @@ export function Deals() {
   return (
     <main class="screen">
       <header>
-        <h1>Deals</h1>
-        <div class="muted">{keywords === null ? ' ' : `Matches for your ${keywords} active ${keywords === 1 ? 'keyword' : 'keywords'}`}</div>
-        <CheckerLine />
+        <div class="top">
+          <div>
+            <h1>Deals</h1>
+            <div class="muted">{keywords === null ? ' ' : `Matches for your ${keywords} active ${keywords === 1 ? 'keyword' : 'keywords'}`}</div>
+            <CheckerLine reload={attempt} />
+          </div>
+          <button type="button" class={loading ? 'refresh spin' : 'refresh'} aria-label="Refresh deals" disabled={loading} onClick={() => setAttempt(attempt + 1)}>
+            ↻
+          </button>
+        </div>
       </header>
 
       {error && (
