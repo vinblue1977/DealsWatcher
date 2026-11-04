@@ -160,6 +160,7 @@ input.text { height: 48px; padding: 0 14px; border-radius: 12px; border: 1px sol
 .card.block { display: block; }
 .title.wrap { white-space: normal; overflow-wrap: anywhere; line-height: 20px; }
 .deal-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.new { margin-right: 8px; padding: 2px 7px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 700; text-transform: uppercase; vertical-align: 1px; }
 .deal-price { flex: none; font-size: 17px; font-weight: 700; color: var(--good); font-variant-numeric: tabular-nums; }
 .deal-meta { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .tag { padding: 3px 8px; border-radius: 999px; background: var(--surface2); color: var(--text); font-weight: 600; }
