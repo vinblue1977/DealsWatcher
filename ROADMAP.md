@@ -68,7 +68,7 @@ Rule for any new source: read its robots.txt **and** its terms of use first, ide
 Decision: track a specific product's lowest price from the deals the feeds list (every store the Dealnews feeds cover), not from store pages. A product is a watch with a `name` (keyword syntax, so `-XM4` works) and an optional price; the checker records each matching deal with a price as a sighting, keeps the lowest price seen on the product, and alerts on a new low and on reaching the user's price. A store with no deal has no price ("no deal seen"). It replaces the store-link watches, which stay readable.
 
 - [x] Backend: product watches in the API (`POST /me/watches` with a `name`), the checker records sightings and sends the alerts (`backend/feeds/products.py`); sightings are kept 90 days, the lowest price stays on the product
-- [ ] App: Watching list, "Track a product" screen, product detail with the per-store table and sightings (replaces the link form)
+- [x] App: Watching list shows tracked products (lowest price seen against your price), "Track a product" replaces the link form, product detail with the per-store table and sightings. Existing link watches stay readable
 
 ## Store price checking (parked)
 

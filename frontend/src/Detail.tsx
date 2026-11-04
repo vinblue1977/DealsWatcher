@@ -4,7 +4,8 @@ import { api, ApiError } from './api';
 import { NO_CHECKER_NOTE, STORE_PRICES_CHECKED, ago, money, parseName, parsePrice, retailerFor, targetMoney, watchState } from './format';
 import { Switch } from './Switch';
 import { go } from './router';
-import type { Watch, WatchPatch } from './types';
+import { ProductDetail } from './ProductDetail';
+import { isProduct, type Watch, type WatchPatch } from './types';
 
 export function Detail({ id }: { id: string }) {
   const [watch, setWatch] = useState<Watch | null>(null);
@@ -22,7 +23,7 @@ export function Detail({ id }: { id: string }) {
       (found) => {
         if (!live) return;
         setWatch(found);
-        setTarget(String(found.targetPrice));
+        setTarget(String(found.targetPrice ?? ''));
         setName(found.title);
       },
       (e: Error) => {
@@ -99,6 +100,8 @@ export function Detail({ id }: { id: string }) {
       </main>
     );
   }
+
+  if (isProduct(watch)) return <ProductDetail product={watch} back={back} onChange={setWatch} />;
 
   const state = watchState(watch);
   const newTarget = parsePrice(target);

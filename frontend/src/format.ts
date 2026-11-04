@@ -1,4 +1,4 @@
-import type { CheckerStatus, Rule, Source, Watch } from './types';
+import { isProduct, type CheckerStatus, type LinkWatch, type Product, type Rule, type Sighting, type Source, type Watch } from './types';
 
 export type Tone = 'good' | 'warn' | 'muted';
 
@@ -99,7 +99,7 @@ export interface WatchState {
   noChecker: boolean;
 }
 
-export function watchState(w: Watch, storePricesChecked = STORE_PRICES_CHECKED): WatchState {
+export function watchState(w: LinkWatch, storePricesChecked = STORE_PRICES_CHECKED): WatchState {
   const base = { atTarget: false, blocked: false, noChecker: false };
   if (w.paused) return { ...base, label: 'Paused', tone: 'muted' };
   if (w.status === 'blocked') return { ...base, label: "Can't read price", tone: 'warn', blocked: true };
@@ -110,10 +110,38 @@ export function watchState(w: Watch, storePricesChecked = STORE_PRICES_CHECKED):
   return { ...base, label: `${targetMoney(Math.round((w.lastPrice - w.targetPrice) * 100) / 100)} above target`, tone: 'muted' };
 }
 
+/** A tracked product's state, from the lowest price seen against the price the person wants (which is optional). */
+export function productState(p: Product): WatchState {
+  const base = { atTarget: false, blocked: false, noChecker: false };
+  if (p.paused) return { ...base, label: 'Paused', tone: 'muted' };
+  if (p.lowestPrice === undefined) return { ...base, label: 'No deal seen yet', tone: 'muted' };
+  if (p.targetPrice === null) return { ...base, label: 'Lowest seen', tone: 'muted' };
+  if (p.lowestPrice <= p.targetPrice) return { ...base, label: `Under your ${targetMoney(p.targetPrice)} target`, tone: 'good', atTarget: true };
+  const over = targetMoney(Math.round((p.lowestPrice - p.targetPrice) * 100) / 100);
+  return { ...base, label: `${over} above your ${targetMoney(p.targetPrice)} target`, tone: 'warn' };
+}
+
+export const stateOf = (w: Watch): WatchState => (isProduct(w) ? productState(w) : watchState(w));
+
+export const KNOWN_STORES = ['Best Buy', 'Walmart', 'Target', 'Costco'];
+
+/** The lowest price seen at each store: the stores the feeds cover first, then any other store that had a deal. A store with no
+ * deal has a null price ("no deal seen"). Cheapest first among the stores that have one. */
+export function byStore(sightings: Sighting[]): { store: string; price: number | null }[] {
+  const lowest = new Map<string, number>();
+  for (const s of sightings) {
+    const store = KNOWN_STORES.find((k) => k.toLowerCase() === (s.retailer ?? '').toLowerCase()) ?? (s.retailer?.trim() || 'Other');
+    lowest.set(store, Math.min(lowest.get(store) ?? Infinity, s.price));
+  }
+  const rows = [...lowest].map(([store, price]) => ({ store, price }));
+  rows.sort((a, b) => a.price - b.price);
+  return [...rows, ...KNOWN_STORES.filter((k) => !lowest.has(k)).map((store) => ({ store, price: null }))];
+}
+
 /** Subtitle under "Watching": the count and when the newest check happened. */
 export function summary(watches: Watch[], now = Date.now()): string {
   const count = `${watches.length} ${watches.length === 1 ? 'item' : 'items'}`;
-  const times = watches.flatMap((w) => (w.lastChecked && !Number.isNaN(Date.parse(w.lastChecked)) ? [w.lastChecked] : []));
+  const times = watches.flatMap((w) => (!isProduct(w) && w.lastChecked && !Number.isNaN(Date.parse(w.lastChecked)) ? [w.lastChecked] : []));
   const checked = times.sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1);
   return checked ? `${count} · checked ${ago(checked, now)}` : count;
 }
@@ -140,7 +168,7 @@ export type WatchFilter = 'all' | 'target' | 'attention';
 
 export function visibleWatches(watches: Watch[], filter: WatchFilter): Watch[] {
   return watches.filter((w) => {
-    const state = watchState(w);
+    const state = stateOf(w);
     return filter === 'all' || (filter === 'target' ? state.atTarget : state.blocked);
   });
 }

@@ -1,4 +1,4 @@
-import { AddWatch } from './AddWatch';
+import { AddProduct } from './AddProduct';
 import { Deals } from './Deals';
 import { Detail } from './Detail';
 import { Keywords } from './Keywords';
@@ -24,7 +24,7 @@ function screen(route: Route, id: string, account: { email: string; onSignOut: (
 
 export function App({ email, onSignOut, passkeyUrl }: { email: string; onSignOut: () => void; passkeyUrl: string }) {
   const { route, id } = useRoute();
-  if (route === 'add') return <AddWatch />;
+  if (route === 'add') return <AddProduct />;
   return (
     <>
       {screen(route, id, { email, onSignOut, passkeyUrl })}
