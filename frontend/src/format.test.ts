@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { STORE_PRICES_CHECKED, ago, checkerLine, hourLabel, initials, money, parseMaxPrice, parseName, parsePrice, retailerFor, ruleLine, safeLink, summary, targetMoney, visibleWatches, watchState } from './format';
-import type { Rule, Watch } from './types';
+import { STORE_PRICES_CHECKED, ago, byStore, checkerLine, hourLabel, initials, money, parseMaxPrice, parseName, parsePrice, productState, retailerFor, ruleLine, safeLink, summary, targetMoney, visibleWatches, watchState } from './format';
+import type { LinkWatch as Watch, Product, Rule, Sighting } from './types';
 
 const watch = (over: Partial<Watch> = {}): Watch => ({
   id: 'abc',
@@ -185,5 +185,54 @@ describe('watches while no store checker exists', () => {
       expect(watchState(watch({ status: 'blocked' }), checked)).toMatchObject({ blocked: true, noChecker: false });
       expect(watchState(watch({ lastPrice: 199 }), checked)).toMatchObject({ label: 'At target', noChecker: false });
     }
+  });
+});
+
+const product = (over: Partial<Product> = {}): Product => ({
+  id: 'p1',
+  name: 'Sony WH-1000XM5',
+  title: 'Sony WH-1000XM5',
+  targetPrice: 260,
+  alertOnLow: true,
+  alertOnDrop: true,
+  paused: false,
+  status: 'ok',
+  createdAt: '2026-11-04T12:00:00Z',
+  ...over,
+});
+
+describe('productState', () => {
+  it('says what the lowest price seen means for the price the person wants', () => {
+    expect(productState(product())).toMatchObject({ label: 'No deal seen yet', tone: 'muted', atTarget: false });
+    expect(productState(product({ lowestPrice: 248 }))).toMatchObject({ label: 'Under your $260 target', tone: 'good', atTarget: true });
+    expect(productState(product({ lowestPrice: 260 }))).toMatchObject({ atTarget: true }); // at the price counts
+    expect(productState(product({ lowestPrice: 270.5 }))).toMatchObject({ label: '$10.50 above your $260 target', tone: 'warn', atTarget: false });
+    expect(productState(product({ lowestPrice: 248, targetPrice: null }))).toMatchObject({ label: 'Lowest seen', atTarget: false });
+    expect(productState(product({ lowestPrice: 248, paused: true })).label).toBe('Paused');
+  });
+});
+
+const seen = (retailer: string | undefined, price: number): Sighting => ({
+  id: `${retailer}${price}`,
+  price,
+  ...(retailer ? { retailer } : {}),
+  publishedAt: '2026-11-04T12:00:00Z',
+  newLow: false,
+});
+
+describe('byStore', () => {
+  it('lists the lowest price per store, cheapest first, then the stores with no deal', () => {
+    const rows = byStore([seen('Best Buy', 279.99), seen('Best Buy', 248), seen('walmart', 259.99), seen('Newegg', 240), seen(undefined, 300)]);
+    expect(rows).toEqual([
+      { store: 'Newegg', price: 240 },
+      { store: 'Best Buy', price: 248 },
+      { store: 'Walmart', price: 259.99 },
+      { store: 'Other', price: 300 },
+      { store: 'Target', price: null },
+      { store: 'Costco', price: null },
+    ]);
+  });
+  it('lists every known store as no deal seen when there are no sightings', () => {
+    expect(byStore([]).map((r) => [r.store, r.price])).toEqual([['Best Buy', null], ['Walmart', null], ['Target', null], ['Costco', null]]);
   });
 });

@@ -1,23 +1,26 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from './api';
-import { NO_CHECKER_EMPTY, NO_CHECKER_NOTE, STORE_PRICES_CHECKED, initials, money, summary, targetMoney, visibleWatches, watchState, type WatchFilter } from './format';
-import type { Watch } from './types';
+import { initials, money, stateOf, summary, targetMoney, visibleWatches, watchState, NO_CHECKER_NOTE, type WatchFilter } from './format';
+import { isProduct, type Watch } from './types';
 
 function Card({ watch }: { watch: Watch }) {
-  const state = watchState(watch);
-  const price = watch.lastPrice;
+  const state = stateOf(watch);
+  const product = isProduct(watch);
+  const price = product ? watch.lowestPrice : watch.lastPrice; // a product shows the lowest price seen
+  const store = product ? (watch.lowestRetailer ?? '') : watch.retailer;
+  const target = watch.targetPrice === null ? 'No price set' : `Target ${targetMoney(watch.targetPrice)}`;
   return (
     <li>
       <a class="card" href={`#/watch/${watch.id}`}>
-      <div class="badge">{initials(watch.retailer)}</div>
+      <div class="badge">{store ? initials(store) : '·'}</div>
       <div class="grow">
         <div class="title">{watch.title}</div>
         <span class={`pill ${state.tone}`}>{state.label}</span>
       </div>
       <div class="price">
         <div class={price === undefined ? 'amount faint' : 'amount'}>{price === undefined ? '—' : money(price)}</div>
-        <div class="muted small">Target {targetMoney(watch.targetPrice)}</div>
+        <div class="muted small">{target}</div>
       </div>
       </a>
     </li>
@@ -55,7 +58,7 @@ export function Watching() {
           <h1>Watching</h1>
           <div class="muted">{watches ? summary(watches) : ' '}</div>
         </div>
-        <a class="fab" href="#/add" aria-label="Add watch">
+        <a class="fab" href="#/add" aria-label="Track a product">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
           </svg>
@@ -83,16 +86,14 @@ export function Watching() {
 
       {watches && watches.length === 0 && (
         <section class="empty">
-          <p>Nothing watched yet.</p>
-          <p class="muted">
-            {STORE_PRICES_CHECKED ? "Add a product link and you'll get a push notification when its price drops." : NO_CHECKER_EMPTY}
-          </p>
+          <p>No products tracked yet.</p>
+          <p class="muted">Track a product by name and you'll get a push notification on a new lowest price, or when it reaches your price.</p>
           <a class="button primary" href="#/add">
-            Add your first watch
+            Track a product
           </a>
         </section>
       )}
-      {watches?.some((w) => watchState(w).noChecker) && <p class="muted small">{NO_CHECKER_NOTE}</p>}
+      {watches?.some((w) => !isProduct(w) && watchState(w).noChecker) && <p class="muted small">{NO_CHECKER_NOTE}</p>}
       {watches && watches.length > 0 && shown.length === 0 && <p class="muted center">Nothing matches this filter.</p>}
       <ul class="list">
         {shown.map((w) => (

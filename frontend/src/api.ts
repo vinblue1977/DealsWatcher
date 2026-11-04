@@ -1,6 +1,6 @@
 import { getAccessToken } from './auth';
 import type { Config } from './config';
-import type { CheckerStatus, Deal, QuietHours, Rule, RuleInput, RulePatch, Settings, Watch, WatchInput, WatchPatch } from './types';
+import type { CheckerStatus, Deal, LinkWatch, Product, ProductInput, ProductPatch, QuietHours, Rule, RuleInput, RulePatch, Settings, Watch, WatchInput, WatchPatch } from './types';
 
 let base = '';
 
@@ -40,8 +40,10 @@ const send = (method: string, body?: unknown): RequestInit => ({ method, ...(bod
 export const api = {
   watches: () => call<{ watches: Watch[] }>('/me/watches').then((r) => r.watches),
   watch: (id: string) => call<Watch>(`/me/watches/${id}`),
+  addProduct: (p: ProductInput) => call<Product>('/me/watches', send('POST', p)),
+  editProduct: (id: string, patch: ProductPatch) => call<Product>(`/me/watches/${id}`, send('PUT', patch)),
   addWatch: (w: WatchInput) => call<Watch>('/me/watches', send('POST', w)),
-  editWatch: (id: string, patch: WatchPatch) => call<Watch>(`/me/watches/${id}`, send('PUT', patch)),
+  editWatch: (id: string, patch: WatchPatch) => call<LinkWatch>(`/me/watches/${id}`, send('PUT', patch)),
   deleteWatch: (id: string) => call<{ deleted: string }>(`/me/watches/${id}`, send('DELETE')),
   rules: () => call<{ rules: Rule[] }>('/me/rules').then((r) => r.rules),
   addRule: (r: RuleInput) => call<Rule>('/me/rules', send('POST', r)),
