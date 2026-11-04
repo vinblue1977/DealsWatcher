@@ -27,7 +27,7 @@ KEEP_DAYS = 30
 MAX_WORKERS = 3  # feeds read at the same time
 START_GAP_SECONDS = 2.0  # between the starts of two requests: Dealnews's robots.txt asks for "Crawl-delay: 2"
 READ_BUDGET_SECONDS = 40  # past this, the extra feeds that have not started are skipped so a slow host cannot eat the whole run
-DIGEST_OVER = 3  # more alerts than this waiting for one user go out as one summary push, not one push each
+DIGEST_OVER = 1  # more alerts than this waiting for one user go out as one summary push: one alert per run, not one per deal
 MAX_HELD_HOURS = 24  # an alert held back (quiet hours, a failed push) is dropped once its deal is this old
 
 
@@ -227,8 +227,9 @@ def _price_alerts(table: Any, user: str, now: datetime, pushed: int, failed: int
         waiting = products.pending(table, user, now, MAX_HELD_HOURS)
         sent: list[dict[str, Any]] = []
         if len(waiting) > DIGEST_OVER:
-            names = ", ".join(i["alertTitle"] for i in waiting[:3])
-            pushed += notify(table, user, f"{len(waiting)} price updates", f"{names} ...", "/#/", strict=True, count=len(waiting))
+            titles = list(dict.fromkeys(i["alertTitle"] for i in waiting))  # the same product twice reads once
+            names = ", ".join(titles[:3]) + (" ..." if len(titles) > 3 else "")
+            pushed += notify(table, user, f"{len(waiting)} price updates", names, "/#/", strict=True, count=len(waiting))
             sent = waiting
         else:
             for item in waiting:
@@ -285,7 +286,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
         pushed, failed = _price_alerts(table, user, now, pushed, failed)
         try:  # everything waiting for this user: new deals, ones held back, ones whose push failed earlier
             unsent = _unsent(table, user, now, {r["keyword"].casefold() for r in rules})
-            if len(unsent) > DIGEST_OVER:  # a flood (Black Friday, or a quiet window just ended): one push, not dozens
+            if len(unsent) > DIGEST_OVER:  # two or more (a busy run, a quiet window just ended): one push, not one each
                 title, body = _digest(unsent)
                 pushed += notify(table, user, title, body, "/#/deals", strict=True, count=len(unsent))
                 for waiting in unsent:  # the push is out: one write failing must not leave the rest to be sent again
