@@ -1,18 +1,22 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { api } from './api';
 import { CheckerLine } from './CheckerLine';
 import { ago, money, safeLink, sourceName } from './format';
+import { markSeen, unseenIds } from './seen';
 import type { Deal, Source } from './types';
 
 const MAX_DEALS = 100; // what the API returns
 
-function Card({ deal }: { deal: Deal }) {
+function Card({ deal, fresh }: { deal: Deal; fresh: boolean }) {
   const link = safeLink(deal.url); // feed links are untrusted: https only
   const body = (
     <>
       <div class="deal-head">
-        <div class="title wrap">{deal.title ?? 'Deal'}</div>
+        <div class="title wrap">
+          {fresh && <span class="new">New</span>}
+          {deal.title ?? 'Deal'}
+        </div>
         {typeof deal.price === 'number' && <div class="deal-price">{money(deal.price)}</div>}
       </div>
       <div class="deal-meta muted small">
@@ -40,11 +44,29 @@ export function Deals() {
   const [error, setError] = useState('');
   const [source, setSource] = useState<Source | 'all'>('all');
   const [attempt, setAttempt] = useState(0);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  const ids = useRef<string[]>([]);
+
+  // Deals are marked seen when the person leaves, so "New" stays visible for the whole visit.
+  useEffect(() => {
+    const save = () => markSeen(ids.current);
+    addEventListener('pagehide', save);
+    return () => {
+      removeEventListener('pagehide', save);
+      save();
+    };
+  }, []);
 
   useEffect(() => {
     let live = true;
     api.deals().then(
-      (found) => live && (setDeals(found), setError('')),
+      (found) => {
+        if (!live) return;
+        if (ids.current.length === 0) setFresh(unseenIds(found.map((d) => d.id))); // a retry or refresh keeps the first answer
+        ids.current = found.map((d) => d.id);
+        setDeals(found);
+        setError('');
+      },
       (e: Error) => live && setError(e.message),
     );
     // The keyword count is a nicety: if it fails the deals still show.
@@ -98,7 +120,7 @@ export function Deals() {
       {deals && deals.length > 0 && shown.length === 0 && <p class="muted center">Nothing from this feed in the latest deals.</p>}
       <ul class="list">
         {shown.map((d) => (
-          <Card key={d.id} deal={d} />
+          <Card key={d.id} deal={d} fresh={fresh.has(d.id)} />
         ))}
       </ul>
       {deals && deals.length >= MAX_DEALS && <p class="muted small center">Showing the latest {MAX_DEALS} deals.</p>}
