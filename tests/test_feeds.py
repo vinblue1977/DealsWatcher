@@ -412,9 +412,14 @@ class TestHandler:
         assert all(d["pushed"] is True for d in deals_of(table))
         assert run(monkeypatch, *items)["pushed"] == 0  # none repeated
 
-    def test_up_to_the_limit_each_deal_still_gets_its_own_push(
-        self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_two_deals_in_one_run_are_one_alert(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_rule(table, keyword="black friday", rid="r1")
+        add_rule(table, keyword="best buy", rid="r2")
+        run(monkeypatch, item("1", title="LEGO Early Black Friday Deals", price=None), item("2", title="My Best Buy Plus offer"))
+        assert pushes == [(USER, "2 new deals", "best buy (1), black friday (1)", "/#/deals")]
+        assert all(d["pushed"] is True for d in deals_of(table))
+
+    def test_a_single_deal_still_gets_its_own_push(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
         add_rule(table, keyword="TV")
         items = [item(str(i), title=f"TV number {i}", minutes_ago=i + 1) for i in range(feeds.DIGEST_OVER)]
         assert run(monkeypatch, *items)["pushed"] == feeds.DIGEST_OVER
@@ -633,7 +638,7 @@ class TestBlackFridayFeed:
     def test_a_deal_in_both_feeds_counts_once(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
         add_rule(table, keyword="OLED")
         assert run(monkeypatch, item("1"), black_friday=(item("1"), item("2", title="OLED sale")))["saved"] == 2
-        assert len(pushes) == 2 and len(deals_of(table)) == 2
+        assert pushes == [(USER, "2 new deals", "OLED (2)", "/#/deals")] and len(deals_of(table)) == 2  # one alert for both
 
     @staticmethod
     def one_feed_down(monkeypatch: pytest.MonkeyPatch, down: str) -> None:
@@ -1132,8 +1137,8 @@ class TestProducts:
             xm5("2", "270.00", minutes_ago=40),
             xm5("3", "260.00", minutes_ago=10),
         )
-        # oldest first: 270 is a low against 300, 250 against 270, and 260 is no low; newest alert first
-        assert [p[2] for p in pushes] == ["$250.00 at Best Buy", "$270.00 at Best Buy"]
+        # oldest first: 270 is a low against 300, 250 against 270, and 260 is no low; both lows go out as one alert
+        assert pushes == [(USER, "2 price updates", "New low: Sony WH-1000XM5", "/#/")]
         assert [s["newLow"] for s in sightings_of(table)] == [True, True, False]
         assert product(table)["lowestPrice"] == Decimal("250.00")
 
