@@ -53,6 +53,7 @@ class DealsWatcherStack(Stack):
         )
         push_env = {"VAPID_KEY_PARAM": VAPID_PARAM, "VAPID_SUBJECT": "https://github.com/vinblue1977/DealsWatcher"}
         site_dir = self.node.try_get_context("siteDir") or "frontend/dist"
+        feeds = Feeds(self, "Feeds", table=self.table, layer=layer, push_env=push_env)
         Web(
             self,
             "Web",
@@ -60,8 +61,8 @@ class DealsWatcherStack(Stack):
             site_dir=site_dir,
             layer=layer,
             push_env=push_env,
+            checker=feeds.checker,  # pyright: ignore[reportArgumentType]
         )
-        feeds = Feeds(self, "Feeds", table=self.table, layer=layer, push_env=push_env)
         # Never in a file: the deploy passes it from a GitHub secret (ALERT_EMAIL), or a developer from `-c alertEmail=...`.
         email = self.node.try_get_context("alertEmail") or os.environ.get("ALERT_EMAIL") or None
         Alerts(self, "Alerts", checker=feeds.checker, email=email)  # pyright: ignore[reportArgumentType]
