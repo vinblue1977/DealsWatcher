@@ -24,6 +24,10 @@ updates:
     commit-message:
       prefix: build
       include: scope
+    # The layer has its own entry below. Without this, the group PR #51 rewrote layer/requirements.txt from the
+    # wrong inputs (CDK packages, python-dateutil 4) and broke CI.
+    exclude-paths:
+      - "layer/**"
     groups:
       python:
         patterns: ["*"]
