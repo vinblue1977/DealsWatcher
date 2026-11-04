@@ -425,6 +425,7 @@ def test_every_route_refuses_a_request_without_a_signed_in_user() -> None:
         "POST /me/watches",
         "GET /me/rules",
         "GET /me/deals",
+        "POST /me/check",
         "POST /me/push/status",
         "PUT /me/push",
     ):
@@ -596,3 +597,30 @@ def test_a_link_watch_still_needs_its_price_and_has_no_low_alert_switch() -> Non
     wid = add_watch()["id"]
     assert call("PUT /me/watches/{id}", {"targetPrice": None}, item_id=wid)[0] == 400
     assert call("PUT /me/watches/{id}", {"alertOnLow": True}, item_id=wid)[0] == 400  # nothing to change for a link watch
+
+
+def test_check_now_starts_the_checker_once_per_cooldown(table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    started: list[int] = []
+    monkeypatch.setattr(api, "_start_checker", lambda: started.append(1))
+    table.put_item(Item={"PK": "CHECKER", "SK": "STATUS", "checkedAt": "2026-01-01T00:00:00+00:00"})
+    assert call("POST /me/check") == (200, {"started": True, "checkedAt": "2026-01-01T00:00:00+00:00"})
+    assert call("POST /me/check", user=OTHER) == (200, {"started": False, "checkedAt": "2026-01-01T00:00:00+00:00"})  # too soon
+    assert started == [1]
+    table.put_item(Item={**api.CHECK_REQUEST_KEY, "requestedAt": "2000-01-01T00:00:00+00:00"})  # the cooldown has passed
+    assert call("POST /me/check")[1]["started"] is True
+    assert started == [1, 1]
+
+
+def test_check_now_before_any_check_and_when_the_checker_cannot_start(table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(api, "_start_checker", lambda: None)
+    assert call("POST /me/check") == (200, {"started": True, "checkedAt": None})
+
+    def fail() -> None:
+        raise RuntimeError("no")
+
+    table.delete_item(Key=api.CHECK_REQUEST_KEY)
+    monkeypatch.setattr(api, "_start_checker", fail)
+    assert call("POST /me/check")[0] == 502
+    assert "Item" not in table.get_item(Key=api.CHECK_REQUEST_KEY)  # a failed start does not make the next press wait
+    monkeypatch.setattr(api, "_start_checker", lambda: None)
+    assert call("POST /me/check")[1]["started"] is True

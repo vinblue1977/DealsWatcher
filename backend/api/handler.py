@@ -1,9 +1,12 @@
 """HTTP API Lambda: the signed-in user's watches, keyword rules, deals feed and push devices."""
 
+import logging
 import os
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import boto3
+from botocore.exceptions import ClientError
 
 from api import rules, settings, watches
 from api.http import json_response, parse_object, query_items, valid_zone, view
@@ -13,6 +16,10 @@ from push.webpush import allowed_endpoint
 
 MAX_DEVICES = 10
 MAX_DEALS = 100
+CHECK_COOLDOWN = timedelta(minutes=2)  # "check now" starts the feed checker at most this often
+CHECK_REQUEST_KEY = {"PK": "CHECKER", "SK": "REQUEST"}  # one shared item, like the checker's status
+
+log = logging.getLogger(__name__)
 MAX_BODY = 8_192  # bytes; the largest real request (a push subscription) is under 1 KB
 
 
@@ -37,12 +44,44 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     if route == "GET /me/status":
         item = table.get_item(Key=status.KEY).get("Item")  # one shared item, no user's data
         return json_response(200, view(item) if item else {"checkedAt": None})
+    if route == "POST /me/check":
+        return _check_now(table)
     if route == "GET /me/deals":
         found = sorted(query_items(table, user, "DEAL#"), key=lambda d: str(d.get("publishedAt", "")), reverse=True)[:MAX_DEALS]
         return json_response(200, {"deals": [{**view(d), "id": d["SK"]} for d in found]})  # id: a stable key for the app
     if route in ("POST /me/push/status", "PUT /me/push", "DELETE /me/push", "POST /me/push/test"):
         return _push(table, user, route, event)
     return json_response(404, {"error": "not found"})
+
+
+def _start_checker() -> None:
+    """Runs the feed checker once, in the background: the app polls the status line for the result."""
+    boto3.client("lambda").invoke(FunctionName=os.environ["CHECKER_FUNCTION"], InvocationType="Event")
+
+
+def _check_now(table: Any) -> dict[str, Any]:
+    """Starts a feed check now, unless one was started in the last CHECK_COOLDOWN. Answers with the time of the last finished
+    check, so the app can tell when the new one is done."""
+    item = table.get_item(Key=status.KEY).get("Item")
+    checked_at = item.get("checkedAt") if item else None
+    now = datetime.now(UTC)
+    try:  # one atomic claim: pressing the button twice, or from two devices, starts one check
+        table.put_item(
+            Item={**CHECK_REQUEST_KEY, "requestedAt": now.isoformat()},
+            ConditionExpression="attribute_not_exists(requestedAt) OR requestedAt < :cutoff",
+            ExpressionAttributeValues={":cutoff": (now - CHECK_COOLDOWN).isoformat()},
+        )
+    except ClientError as e:
+        if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        return json_response(200, {"started": False, "checkedAt": checked_at})
+    try:
+        _start_checker()
+    except Exception:
+        log.exception("checker could not be started")
+        table.delete_item(Key=CHECK_REQUEST_KEY)  # nothing started: do not make the next press wait
+        return json_response(502, {"error": "could not start a check"})
+    return json_response(200, {"started": True, "checkedAt": checked_at})
 
 
 def _push(table: Any, user: str, route: str, event: dict[str, Any]) -> dict[str, Any]:

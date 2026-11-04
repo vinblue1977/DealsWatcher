@@ -33,6 +33,7 @@ class Web(Construct):
         site_dir: str,
         layer: lambda_.ILayerVersion,
         push_env: dict[str, str],
+        checker: lambda_.IFunction,
     ) -> None:
         super().__init__(scope, construct_id)
         region = Stack.of(self).region
@@ -193,6 +194,7 @@ class Web(Construct):
             timeout=Duration.seconds(10),
             environment={
                 "TABLE_NAME": table.table_name,
+                "CHECKER_FUNCTION": checker.function_name,
                 **push_env,
             },
             layers=[layer],
@@ -203,6 +205,7 @@ class Web(Construct):
         # No crash alarm for the API: you are its only user and see errors in the app. Each alarm beyond the account's free 10
         # costs about $0.10 a month; alarms arrive with the checkers (Phases 5 and 6), where failures are silent.
         grant_vapid(fn)  # "send a test"
+        checker.grant_invoke(fn)  # "check now"
         api = apigw.HttpApi(
             self,
             "HttpApi",
@@ -234,6 +237,7 @@ class Web(Construct):
             (apigw.HttpMethod.GET, "/me/deals"),
             (apigw.HttpMethod.GET, "/me/settings"),
             (apigw.HttpMethod.GET, "/me/status"),
+            (apigw.HttpMethod.POST, "/me/check"),
             (apigw.HttpMethod.PUT, "/me/settings"),
             (apigw.HttpMethod.POST, "/me/push/status"),
             (apigw.HttpMethod.PUT, "/me/push"),

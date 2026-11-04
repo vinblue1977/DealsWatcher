@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { api } from './api';
 import { CheckerLine } from './CheckerLine';
+import { checkNow } from './checkNow';
 import { ago, money, safeLink, sourceName } from './format';
 import { hide, loadHidden, saveHidden, unhide } from './hidden';
 import { markSeen, unseenIds } from './seen';
@@ -50,6 +51,8 @@ export function Deals() {
   const [source, setSource] = useState<Source | 'all'>('all');
   const [attempt, setAttempt] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [checking, setChecking] = useState(false); // the refresh button asked the backend to read the feeds, and it is still at it
+  const mounted = useRef(true);
   const left = useRef(0); // when the app last went to the background
   const [hiddenIds, setHiddenIds] = useState<string[]>(loadHidden);
   const [showHidden, setShowHidden] = useState(false);
@@ -59,6 +62,23 @@ export function Deals() {
   const [maxPrice, setMaxPrice] = useState('');
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const ids = useRef<string[]>([]);
+
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
+
+  // The refresh button reads the feeds now, then loads what they found.
+  const refresh = () => {
+    setChecking(true);
+    void checkNow(() => mounted.current).finally(() => {
+      if (!mounted.current) return;
+      setChecking(false);
+      setAttempt((n) => n + 1);
+    });
+  };
 
   // Deals are marked seen when the person leaves, so "New" stays visible for the whole visit.
   useEffect(() => {
@@ -143,7 +163,7 @@ export function Deals() {
             <div class="muted">{keywords === null ? ' ' : `Matches for your ${keywords} active ${keywords === 1 ? 'keyword' : 'keywords'}`}</div>
             <CheckerLine reload={attempt} />
           </div>
-          <button type="button" class={loading ? 'refresh spin' : 'refresh'} aria-label="Refresh deals" disabled={loading} onClick={() => setAttempt(attempt + 1)}>
+          <button type="button" class={loading || checking ? 'refresh spin' : 'refresh'} aria-label="Check for new deals" disabled={loading || checking} onClick={refresh}>
             ↻
           </button>
         </div>

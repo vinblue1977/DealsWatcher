@@ -32,6 +32,7 @@ describe('api client', () => {
     ['deleteWatch', () => api.deleteWatch('w1'), 'DELETE', '/me/watches/w1', undefined],
     ['addRule', () => api.addRule({ keyword: 'OLED' }), 'POST', '/me/rules', { keyword: 'OLED' }],
     ['editRule', () => api.editRule('r1', { enabled: false }), 'PUT', '/me/rules/r1', { enabled: false }],
+    ['checkNow', () => api.checkNow(), 'POST', '/me/check', {}],
     ['editRule (any price)', () => api.editRule('r1', { maxPrice: null }), 'PUT', '/me/rules/r1', { maxPrice: null }], // null must reach the API, not be dropped
     ['saveQuietHours', () => api.saveQuietHours({ start: 22, end: 7 }, 'America/Chicago'), 'PUT', '/me/settings', { quietHours: { start: 22, end: 7 }, timeZone: 'America/Chicago' }],
     ['saveQuietHours (off)', () => api.saveQuietHours(null, 'America/Chicago'), 'PUT', '/me/settings', { quietHours: null, timeZone: 'America/Chicago' }], // null must reach the API
