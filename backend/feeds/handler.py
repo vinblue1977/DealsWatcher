@@ -2,7 +2,6 @@
 
 import logging
 import os
-import re
 import threading
 import time
 from collections import Counter
@@ -14,7 +13,8 @@ from zoneinfo import ZoneInfo
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
 
-from feeds import dealnews, status
+from feeds import dealnews, products, status
+from feeds.matching import label as _label
 from feeds.matching import matches
 from push.notify import notify
 
@@ -170,14 +170,6 @@ def _unsent(table: Any, user: str, now: datetime, keywords: set[str]) -> list[di
     return sorted(found, key=lambda i: i["publishedAt"], reverse=True)
 
 
-_EXCLUSION = re.compile(r'-"[^"]*"|(?<!\S)-[^\W\d_]\S*')
-
-
-def _label(keyword: str) -> str:
-    """A keyword as the summary shows it: without its `-exclusions` and quote marks (`TV -mount "Pro Max"` reads `TV Pro Max`)."""
-    return " ".join(_EXCLUSION.sub("", keyword).replace('"', "").split()) or keyword
-
-
 def _digest(unsent: list[dict[str, Any]]) -> tuple[str, str]:
     """One summary push for many deals: "12 new deals", then the keywords with the most ("TV (5), OLED (4) and 2 more").
     Keywords that differ only in case count together.
@@ -229,6 +221,35 @@ def _claim(table: Any, user: str, deal: dict[str, Any], rule: dict[str, Any], no
     return "new"
 
 
+def _price_alerts(table: Any, user: str, now: datetime, pushed: int, failed: int) -> tuple[int, int]:
+    """Sends this user's waiting price alerts: one push each, or one summary when there are many. Returns the new counts."""
+    try:
+        waiting = products.pending(table, user, now, MAX_HELD_HOURS)
+        sent: list[dict[str, Any]] = []
+        if len(waiting) > DIGEST_OVER:
+            names = ", ".join(i["alertTitle"] for i in waiting[:3])
+            pushed += notify(table, user, f"{len(waiting)} price updates", f"{names} ...", "/#/", strict=True, count=len(waiting))
+            sent = waiting
+        else:
+            for item in waiting:
+                try:  # one alert failing must not stop the others
+                    pushed += notify(table, user, item["alertTitle"], item["alertBody"], "/#/", strict=True)
+                    sent.append(item)
+                except Exception:
+                    log.exception("price alert failed")
+                    failed += 1
+        for item in sent:
+            try:
+                _mark_sent(table, item)
+            except Exception:
+                log.exception("price alert could not be marked sent")
+                failed += 1
+    except Exception:
+        log.exception("price alerts failed")
+        failed += 1
+    return pushed, failed
+
+
 def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
     table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])  # pyright: ignore[reportAttributeAccessIssue]
     now = datetime.now(UTC)
@@ -237,7 +258,10 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
         _record_status(table, datetime.now(UTC), counts)  # the time the feeds were read, even if an alert fails later
     deals = dealnews.age_limit(now, found, MAX_AGE_HOURS)
     saved = pushed = failed = matched = already_sent = 0
-    for user, rules in _rules_by_user(table).items():
+    rules_by_user = _rules_by_user(table)
+    tracked = products.products_by_user(table)
+    for user in [*rules_by_user, *(u for u in tracked if u not in rules_by_user)]:  # users with keywords and/or products
+        rules = rules_by_user.get(user, [])
         quiet = _is_quiet(table, user, now)  # quiet: deals are still saved, their alerts wait for the window to end
         for deal in deals:
             rule = next((r for r in rules if matches(r, deal, SOURCE)), None)
@@ -251,8 +275,14 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, int]:
             except Exception:
                 log.exception("deal could not be saved")
                 failed += 1
+        try:  # prices are recorded even in quiet hours; their alerts wait like the others
+            products.record(table, user, tracked.get(user, []), deals, now, SOURCE)
+        except Exception:
+            log.exception("product prices could not be recorded")
+            failed += 1
         if quiet:
             continue
+        pushed, failed = _price_alerts(table, user, now, pushed, failed)
         try:  # everything waiting for this user: new deals, ones held back, ones whose push failed earlier
             unsent = _unsent(table, user, now, {r["keyword"].casefold() for r in rules})
             if len(unsent) > DIGEST_OVER:  # a flood (Black Friday, or a quiet window just ended): one push, not dozens

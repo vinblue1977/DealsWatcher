@@ -506,3 +506,93 @@ def test_status_shows_when_the_checker_last_ran(table: Any) -> None:
     }
     assert call("GET /me/status", user=OTHER)[1]["feedsRead"] == 8  # the same for everyone: it is about the checker, not a user
     assert call("GET /me/status", user=None)[0] == 401
+
+
+def add_product(**overrides: Any) -> dict[str, Any]:
+    status, body = call("POST /me/watches", {"name": "Sony WH-1000XM5", **overrides})
+    assert status == 201, body
+    return body
+
+
+def test_create_a_product_with_or_without_a_price() -> None:
+    free = add_product()
+    assert free["name"] == "Sony WH-1000XM5" and free["title"] == "Sony WH-1000XM5" and free["targetPrice"] is None
+    assert free["alertOnLow"] is True and free["alertOnDrop"] is True and free["paused"] is False and "url" not in free
+    priced = add_product(name='Dyson "V8 Absolute" -refurbished', targetPrice="229.5", alertOnLow=False)
+    assert priced["targetPrice"] == 229.5 and priced["alertOnLow"] is False
+    assert priced["title"] == "Dyson V8 Absolute"  # shown without the exclusions and quote marks
+    listed = call("GET /me/watches")[1]["watches"]
+    assert {w["id"] for w in listed} == {free["id"], priced["id"]}
+
+
+def test_product_validation() -> None:
+    for bad in (
+        {"name": ""},
+        {"name": "x" * 61},
+        {"name": 5},
+        {"name": "-XM4"},  # only an exclusion: nothing to look for
+        {"name": '"open'},
+        {"name": "Sony", "targetPrice": 0},
+        {"name": "Sony", "targetPrice": "cheap"},
+        {"name": "Sony", "alertOnLow": "yes"},
+        {"name": "Sony", "alertOnDrop": 1},
+    ):
+        assert call("POST /me/watches", bad)[0] == 400, bad
+
+
+def test_the_same_product_cannot_be_tracked_twice_but_another_user_can() -> None:
+    add_product(name="Sony WH-1000XM5")
+    assert call("POST /me/watches", {"name": "wh-1000xm5  SONY"})[0] == 201  # plain words are one ordered phrase: another product
+    assert call("POST /me/watches", {"name": "sony wh-1000xm5"})[0] == 400
+    assert call("POST /me/watches", {"name": "Sony WH-1000XM5"}, user=OTHER)[0] == 201
+
+
+def test_a_product_shows_its_sightings_newest_first_and_hides_alert_text(table: Any) -> None:
+    wid = add_product()["id"]
+    for deal, price_, when in (("d1", 299, "2026-10-01T10:00:00+00:00"), ("d2", 248, "2026-10-03T10:00:00+00:00")):
+        table.put_item(
+            Item={
+                "PK": f"USER#{USER}",
+                "SK": f"SIGHT#{wid}#{deal}",
+                "price": price_,
+                "title": "Sony WH-1000XM5",
+                "url": f"https://www.dealnews.com/{deal}",
+                "retailer": "Best Buy",
+                "publishedAt": when,
+                "newLow": deal == "d2",
+                "pushed": False,
+                "alertTitle": "New low",
+                "alertBody": "secret",
+                "ttl": 1,
+            }
+        )
+    table.put_item(Item={"PK": f"USER#{USER}", "SK": "SIGHT#other#d9", "price": 1, "publishedAt": "2026-10-04T00:00:00+00:00"})
+    status, body = call("GET /me/watches/{id}", item_id=wid)
+    assert status == 200 and [s["id"] for s in body["sightings"]] == ["d2", "d1"]
+    assert body["sightings"][0] == {
+        "id": "d2",
+        "price": 248,
+        "title": "Sony WH-1000XM5",
+        "url": "https://www.dealnews.com/d2",
+        "retailer": "Best Buy",
+        "publishedAt": "2026-10-03T10:00:00+00:00",
+        "newLow": True,
+    }
+    assert "sightings" not in call("GET /me/watches/{id}", item_id=add_watch()["id"])[1]  # a link watch has none
+    assert call("GET /me/watches/{id}", item_id=wid, user=OTHER)[0] == 404
+
+
+def test_update_a_product_clear_its_price_and_delete_it_with_its_sightings(table: Any) -> None:
+    wid = add_product(targetPrice=250)["id"]
+    table.put_item(Item={"PK": f"USER#{USER}", "SK": f"SIGHT#{wid}#d1", "price": 1, "publishedAt": "x"})
+    status, body = call("PUT /me/watches/{id}", {"targetPrice": None, "alertOnLow": False}, item_id=wid)
+    assert status == 200 and body["targetPrice"] is None and body["alertOnLow"] is False
+    assert call("PUT /me/watches/{id}", {"targetPrice": 0}, item_id=wid)[0] == 400
+    assert call("DELETE /me/watches/{id}", item_id=wid) == (200, {"deleted": wid})
+    assert [i for i in table.scan()["Items"] if i["SK"].startswith("SIGHT#")] == []
+
+
+def test_a_link_watch_still_needs_its_price_and_has_no_low_alert_switch() -> None:
+    wid = add_watch()["id"]
+    assert call("PUT /me/watches/{id}", {"targetPrice": None}, item_id=wid)[0] == 400
+    assert call("PUT /me/watches/{id}", {"alertOnLow": True}, item_id=wid)[0] == 400  # nothing to change for a link watch

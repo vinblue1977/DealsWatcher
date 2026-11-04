@@ -63,6 +63,13 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 
 Rule for any new source: read its robots.txt **and** its terms of use first, identify the checker honestly, and skip it if it says no. No evasion (no disguised browsers, no rotating addresses).
 
+## Product price tracking (2026-11-04)
+
+Decision: track a specific product's lowest price from the deals the feeds list (every store the Dealnews feeds cover), not from store pages. A product is a watch with a `name` (keyword syntax, so `-XM4` works) and an optional price; the checker records each matching deal with a price as a sighting, keeps the lowest price seen on the product, and alerts on a new low and on reaching the user's price. A store with no deal has no price ("no deal seen"). It replaces the store-link watches, which stay readable.
+
+- [x] Backend: product watches in the API (`POST /me/watches` with a `name`), the checker records sightings and sends the alerts (`backend/feeds/products.py`); sightings are kept 90 days, the lowest price stays on the product
+- [ ] App: Watching list, "Track a product" screen, product detail with the per-store table and sightings (replaces the link form)
+
 ## Store price checking (parked)
 
 The watch list can hold product links, but nothing reads their prices yet, so watches show "Waiting for first check". Decision (2026-10-28): feeds first, no store scraping.
