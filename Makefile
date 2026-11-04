@@ -16,6 +16,7 @@ install:            ## Create the virtualenv and install everything (uv if insta
 	npm ci --prefix frontend --ignore-scripts --no-audit --no-fund  # the PWA and its tools
 
 check:              ## Everything CI checks, locally (synth uses a stand-in app, like CI)
+	@$(PYTHON) -c "import importlib.util, sys; sys.exit(importlib.util.find_spec('aws_cdk') is None)" 2>/dev/null || { echo "The virtualenv is missing or out of date: run 'make install' first."; exit 1; }
 	$(MAKE) privacy lint test frontend audit
 	$(MAKE) synth SITE_DIR=tests/fixtures/site LAYER_DIR=tests/fixtures/layer
 
