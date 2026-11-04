@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "preact": "11.0.1"
+    "preact": "11.1.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -18,7 +18,7 @@
     "eslint": "10.13.0",
     "globals": "17.13.0",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.72.0",
+    "typescript-eslint": "8.72.1",
     "vite": "8.3.5",
     "vitest": "5.0.5"
   }
