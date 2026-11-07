@@ -98,7 +98,7 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 ## Engineering backlog (from code reviews)
 
 - [ ] Feed checker finds rules with a full-table Scan every 30 minutes: fine now, add a rule index if the table or user count grows
-- [ ] `notify` re-queries a user's devices per deal (at most 3 per run now, or one summary): fetch once per user
+- ~~`notify` re-queries a user's devices per deal~~: not worth doing (2026-11-07). A run sends at most about 3 pushes or one summary per user, so it is a few cheap key-only queries a run; sharing the device list between sends would also risk pushing to a device the previous send had just found expired and removed
 - [ ] Share the "load / retry" notice and fetch pattern across screens (repeated in five places)
 - [ ] Rendering tests for the screens (needs a DOM test setup and a new dev dependency; the logic is covered by pure-function tests)
 - [x] Fetch feeds concurrently: three workers, requests start at least 0.5 s apart (changed to 2 s on 2026-11-03, see Sources; an estimate: reading should drop from about 10-15 s to about 4-6 s; check the run log after deploy). Still polite: no bursts, the same 40 s budget, a failing extra feed is only logged
@@ -110,7 +110,7 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 - [ ] Duplicate keyword check is read-then-write: two simultaneous adds can slip past (strict fix needs a different key design)
 - [ ] Older keyword rules may still list Reddit or Slickdeals as sources (harmless, hidden in the UI); migrate if it ever matters
 - [ ] Dependabot: `aws-cdk-lib` updates are paused until botocore allows python-dateutil 3 (remove the ignore in `.github/dependabot.yml` then; never merge an update that drops `cryptography` from `layer/requirements.txt`)
-- [ ] After Black Friday: check whether the Black Friday feed still exists, and drop it if not
+- [ ] After Black Friday: check whether the Black Friday feed still exists, and drop it if not (it answered with 50 items on 2026-11-07)
 - [ ] CSP `connect-src` allows any `*.execute-api` host in the region; pinning needs a custom domain
 - [ ] WAF and a stricter CloudFront TLS floor need a custom domain or budget (about $5/month for WAF)
 
