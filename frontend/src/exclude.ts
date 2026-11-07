@@ -9,7 +9,7 @@ const sameWord = (word: string, keywordWords: Set<string>): boolean => [...keywo
 export function candidateWords(title: string, keyword: string): string[] {
   const inKeyword = new Set((keyword.match(/[a-z][a-z0-9]*/gi) ?? []).map((w) => w.toLowerCase()));
   const out: string[] = [];
-  for (const match of title.match(/(?<![a-z0-9])[a-z][a-z0-9]{2,}(?![a-z0-9])/gi) ?? []) {
+  for (const match of title.split(/[^a-z0-9]+/i).filter((w) => /^[a-z][a-z0-9]{2,}$/i.test(w))) {
     const word = match.toLowerCase();
     if (inKeyword.has(word) || sameWord(word, inKeyword) || SKIP.has(word) || out.includes(word)) continue;
     out.push(word);
