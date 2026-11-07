@@ -59,6 +59,7 @@ How to read this: `[x]` done, `[ ]` open. Items marked **needs you** wait on som
 | Woot | Not used | Terms ban scraping. An official API exists (`developer.woot.com`, 1,000 requests a day, key requested through their forums); Woot deals only |
 | Hip2Save | Not used | robots.txt allows its feed, but its terms of use ban robots, spiders and "any manual process to monitor or copy" |
 | 9to5Toys | On hold | Valid public RSS feed that robots.txt allows (Best Buy and Amazon deals with prices), but no terms page could be found. Do not build on it until its terms are read |
+| Tennis Warehouse | Not used (2026-11-07) | Terms ban robots, crawling and data gathering; robots.txt blocks a price-monitor bot. Workaround: the keyword "Tennis Warehouse" matches Dealnews deals sold by them |
 | Amazon | Not planned | Blocks scrapers |
 
 Rule for any new source: read its robots.txt **and** its terms of use first, identify the checker honestly, and skip it if it says no. No evasion (no disguised browsers, no rotating addresses).
@@ -74,7 +75,7 @@ Decision: track a specific product's lowest price from the deals the feeds list 
 
 The watch list can hold product links, but nothing reads their prices yet, so watches show "Waiting for first check". Decision (2026-10-28): feeds first, no store scraping.
 
-- [ ] **Tennis Warehouse** (the most plausible store): robots.txt allows product pages, no explicit ban found in its terms (keyword scan, not a legal review), price is plain page markup (`itemprop="price"`). Signals against: its robots.txt blocks a named price-monitor bot ("ChangeDetection"). If built: only its product pages, one request per product once or twice a day, 30 seconds between requests, honest User-Agent, stop at the first block ("Can't read price"). Alternative: ask them for permission first. Interim: keyword "Tennis Warehouse" (added). **Decision needed**
+- [x] **Tennis Warehouse**: skipped (2026-11-07). Its terms of use (termsofuse.html, read 2026-11-07) clause (g) ban "data mining, robots, crawling, data gathering and extraction tools, whether automatic or manual" not made available by them, and its robots.txt blocks a price-monitor bot by name. An earlier note here said no ban was found; that was a keyword scan and was wrong. Deals still reach you through the keyword "Tennis Warehouse" on Dealnews. Written permission (privacy@warehousesports.com is the contact in the terms) or an official affiliate product feed would change that
 - [ ] **Best Buy** (official API, free key): the signup rejects free email providers and `.edu`. **Needs you**: a work or custom-domain email, or skip. Best Buy blocks page requests, so no API means no Best Buy. Never put the key in the chat or the repo (SSM only)
 - [ ] Target, Walmart, Costco: not started. Terms restrict automated access; Target's price comes from an unofficial private API. Not planned
 - [ ] Before any store checker: test from AWS, since cloud addresses are often blocked
