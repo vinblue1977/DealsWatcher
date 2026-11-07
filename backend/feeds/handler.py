@@ -14,8 +14,8 @@ import boto3
 from boto3.dynamodb.conditions import Attr, Key
 
 from feeds import dealnews, products, status
+from feeds.matching import excluded, matches
 from feeds.matching import label as _label
-from feeds.matching import matches
 from push.notify import notify
 
 log = logging.getLogger(__name__)
@@ -149,12 +149,20 @@ def _is_quiet(table: Any, user: str, now: datetime) -> bool:
     return start <= hour < end if start < end else hour >= start or hour < end
 
 
-def _still_wanted(keyword: str, keywords: set[str]) -> bool:
+def _still_wanted(item: dict[str, Any], keywords: set[str]) -> bool:
     """A stored deal keeps the keyword it matched under. It still counts when that keyword is enabled, or has since gained
-    exclusions ("TV" became "TV -mount": the app appends them), so deals waiting under the old text are not dropped.
+    exclusions ("TV" became "TV -mount": the app appends them) and the deal does not mention a skipped word, so deals waiting
+    under the old text are not dropped, but a word the person just chose to skip does not alert after all.
     """
-    keyword = keyword.casefold()
-    return keyword in keywords or any(k.startswith(f"{keyword} -") for k in keywords)
+    keyword = str(item.get("keyword", "")).casefold()
+    if keyword in keywords:
+        return True
+    text = " ".join(str(item[k]) for k in ("title", "retailer", "category") if item.get(k)).casefold()
+    for k in keywords:
+        if k.startswith(f"{keyword} -"):
+            if not excluded(k, text):
+                return True
+    return False
 
 
 def _unsent(table: Any, user: str, now: datetime, keywords: set[str]) -> list[dict[str, Any]]:
@@ -171,7 +179,7 @@ def _unsent(table: Any, user: str, now: datetime, keywords: set[str]) -> list[di
     }
     while True:
         page = table.query(**kwargs)
-        found += [i for i in page["Items"] if _still_wanted(str(i.get("keyword", "")), keywords)]
+        found += [i for i in page["Items"] if _still_wanted(i, keywords)]
         if "LastEvaluatedKey" not in page:
             break
         kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]

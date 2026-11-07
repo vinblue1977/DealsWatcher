@@ -133,18 +133,23 @@ export function Deals() {
   }, [attempt]);
 
   const change = (next: string[]) => (setHiddenIds(next), saveHidden(next));
-  useEffect(() => {
-    if (undo === null || picking) return; // the word picker keeps the bar open
-    const t = setTimeout(() => setUndo(null), 6000);
-    return () => clearTimeout(t);
-  }, [undo, picking]);
-
   const keywords = rules === null ? null : rules.filter((r) => r.enabled).length;
   const undoDeal = undo === null ? undefined : (deals ?? []).find((d) => d.id === undo);
   // A deal keeps the keyword it matched under; once a word is skipped the rule reads "<that keyword> -word".
-  const undoRule = undoDeal?.keyword ? (rules ?? []).find((r) => r.keyword === undoDeal.keyword || r.keyword.startsWith(`${undoDeal.keyword} -`)) : undefined;
+  const sameText = (r: Rule) => r.keyword.toLowerCase() === undoDeal?.keyword?.toLowerCase();
+  const undoRule = undoDeal?.keyword ? ((rules ?? []).find(sameText) ?? (rules ?? []).find((r) => r.keyword.toLowerCase().startsWith(`${undoDeal.keyword?.toLowerCase()} -`))) : undefined;
   const words = undoDeal && undoRule ? candidateWords(undoDeal.title ?? '', undoRule.keyword) : [];
+  const pickerOpen = picking && undo !== null && undoRule !== undefined; // if the rule disappears while picking, the plain bar comes back
+  useEffect(() => {
+    if (undo === null || pickerOpen) return; // the word picker keeps the bar open
+    const t = setTimeout(() => setUndo(null), 6000);
+    return () => clearTimeout(t);
+  }, [undo, pickerOpen]);
+  const undoNow = useRef<string | null>(null);
+  undoNow.current = undo;
+
   const exclude = async (rule: Rule, word: string) => {
+    const forDeal = undo; // the person may hide another deal while this saves
     setExcluding(true);
     try {
       // Read the rule again first: it may have changed on another device since the list loaded.
@@ -156,6 +161,7 @@ export function Deals() {
       const updated = await api.editRule(rule.id, { keyword });
       if (!mounted.current) return;
       setRules((current) => (current ?? []).map((r) => (r.id === rule.id ? updated : r)));
+      if (undoNow.current !== forDeal) return; // the bar has moved on to another deal: leave it alone
       setNote(`Skipping "${word}" for ${rule.keyword} from now on.`);
       setPicking(false);
       setUndo(null);
@@ -297,7 +303,7 @@ export function Deals() {
           </button>
         </p>
       )}
-      {note && !picking && undo === null && (
+      {note && undo === null && (
         <div class="undo" role="status">
           <span>{note}</span>
           <button type="button" class="textbutton" onClick={() => setNote('')}>
@@ -305,7 +311,7 @@ export function Deals() {
           </button>
         </div>
       )}
-      {undo !== null && picking && undoRule && (
+      {pickerOpen && undoRule && (
         <div class="undo picker" role="group" aria-label={`Skip a word for ${undoRule.keyword}`}>
           <span class="small">Skip deals for {undoRule.keyword} that mention:</span>
           <div class="chips">
@@ -320,12 +326,12 @@ export function Deals() {
               {note}
             </span>
           )}
-          <button type="button" class="textbutton" onClick={() => (setPicking(false), setNote(''), setUndo(null))}>
+          <button type="button" class="textbutton" disabled={excluding} onClick={() => (setPicking(false), setNote(''), setUndo(null))}>
             Cancel
           </button>
         </div>
       )}
-      {undo !== null && !picking && (
+      {undo !== null && !pickerOpen && (
         <div class="undo" role="status">
           <span>Deal hidden</span>
           {undoRule && words.length > 0 && (

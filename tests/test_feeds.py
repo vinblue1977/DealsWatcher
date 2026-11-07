@@ -112,10 +112,15 @@ def xml_headers(content_type: str = "text/xml; charset=utf-8") -> Message:
 
 class TestStillWanted:
     def test_a_deal_survives_its_keyword_gaining_exclusions(self) -> None:
-        assert feeds._still_wanted("TV", {"tv"})
-        assert feeds._still_wanted("TV", {"tv -mount"})
-        assert not feeds._still_wanted("TV", {"tvs -mount", "laptop"})
-        assert not feeds._still_wanted("TV", set())
+        deal = {"keyword": "TV", "title": "Samsung 55in TV", "retailer": "Best Buy"}
+        assert feeds._still_wanted(deal, {"tv"})
+        assert feeds._still_wanted(deal, {"tv -mount"})
+        assert not feeds._still_wanted(deal, {"tvs -mount", "laptop"})
+        assert not feeds._still_wanted(deal, set())
+
+    def test_a_waiting_deal_with_a_skipped_word_is_dropped(self) -> None:
+        deal = {"keyword": "TV", "title": "TV Wall Mount Kit", "retailer": "Target"}
+        assert not feeds._still_wanted(deal, {"tv -mount"})
 
 
 class TestFetch:

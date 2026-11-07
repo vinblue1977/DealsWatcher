@@ -68,6 +68,12 @@ def _found(phrase: str, text: str) -> bool:
     return re.search(rf"(?<!\w){re.escape(phrase)}(?:e?s)?(?!\w)", text) is not None
 
 
+def excluded(keyword: str, text: str) -> bool:
+    """The text mentions a word the keyword skips (`-word`)."""
+    terms = parse_keyword(keyword)
+    return terms is not None and any(_found(p, text.casefold()) for p in terms.unwanted)
+
+
 def matches(rule: dict[str, Any], deal: dict[str, Any], source: str) -> bool:
     """The rule is on, listens to this source, the price (if the rule has a ceiling) fits, and the keyword is in the title,
     store or category (see the syntax above).

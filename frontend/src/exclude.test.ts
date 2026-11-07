@@ -10,7 +10,7 @@ describe('candidateWords', () => {
   it('skips filler, short words, numbers and words starting with a digit', () => {
     expect(candidateWords('The 4K TV is on sale for 50 off', 'tv')).toEqual([]);
   });
-  it('does not cut words at apostrophes or hyphens into odd pieces', () => {
+  it('treats apostrophes and hyphens as word breaks', () => {
     expect(candidateWords("Men's T-Shirt", 'shirt')).toEqual(['men']);
   });
   it('leaves out plurals of the keyword, which the matcher treats as the same word', () => {
