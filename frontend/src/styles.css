@@ -1,4 +1,4 @@
-/* Colour tokens: the only place colours are written. Dark ships first; light mode is a second value set later. */
+/* Colour tokens: the only place colours are written. Dark is the default; Settings > Appearance picks Light, or Auto (the phone decides). */
 :root {
   color-scheme: dark;
   --bg: #0b0d10;
@@ -12,6 +12,38 @@
   --good: #3dd68c;
   --warn: #f5c451;
   --bad: #ff8a7a;
+}
+
+/* Light: chosen directly, or by Auto when the phone is in light mode. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface2: #eceef2;
+  --line: #d9dde3;
+  --text: #14181d;
+  --muted: #5b6573;
+  --accent: #d68a16;
+  --accent-ink: #1a1204;
+  --good: #12804a;
+  --warn: #8a5a00;
+  --bad: #c0392b;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme='auto'] {
+    color-scheme: light;
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface2: #eceef2;
+    --line: #d9dde3;
+    --text: #14181d;
+    --muted: #5b6573;
+    --accent: #d68a16;
+    --accent-ink: #1a1204;
+    --good: #12804a;
+    --warn: #8a5a00;
+    --bad: #c0392b;
+  }
 }
 
 * { box-sizing: border-box; }

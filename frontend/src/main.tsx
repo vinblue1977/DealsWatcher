@@ -6,10 +6,13 @@ import { addPasskeyUrl, currentEmail, initAuth, keepFresh, logout } from './auth
 import { loadConfig } from './config';
 import { clearBadge } from './badge';
 import { initPush } from './push';
+import { applyTheme, savedTheme, watchTheme } from './theme';
 import { reloadIfNewer } from './version';
 import './styles.css';
 
 async function start(root: HTMLElement) {
+  applyTheme(savedTheme()); // before anything is drawn, so a light choice does not flash dark
+  watchTheme();
   // Never leave the page empty: this shows while settings load and while the sign-in redirect is under way.
   render(
     <main class="screen">

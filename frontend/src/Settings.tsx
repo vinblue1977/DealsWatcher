@@ -1,3 +1,4 @@
+import { Appearance } from './Appearance';
 import { CheckerLine } from './CheckerLine';
 import { Notifications } from './Notifications';
 import { QuietHours } from './QuietHours';
@@ -10,6 +11,7 @@ export function Settings({ email, onSignOut, passkeyUrl }: { email: string; onSi
       </header>
       <Notifications />
       <QuietHours />
+      <Appearance />
       <section class="group">
         <div class="setting">
           <span>Signed in</span>
