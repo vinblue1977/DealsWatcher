@@ -9,5 +9,6 @@
 - After `gh pr create`, run `gh pr merge --auto --squash` yourself. There is no bot auto-merge: merges made with
   `GITHUB_TOKEN` don't start the push run, so the deploy would be skipped.
 - When an earlier PR merges, run `gh pr update-branch <n>` on the PRs still open (branch protection needs them up to date).
+- After any merge into main, check open Dependabot PRs (`gh pr list --author "app/dependabot"`). Ask each one that is behind main to rebase by commenting `@dependabot rebase` (`gh pr comment <n> --body "@dependabot rebase"`). `gh pr update-branch` also works, but a rebase keeps Dependabot able to manage the PR.
 - After a PR merges, delete its branches: `git fetch --prune`, then `git branch -D` every local branch marked `gone` (and any remote branch of a merged PR that GitHub left behind). Never delete a branch with an open PR.
 - If a PR ever merges without a push run on main, deploy with `gh workflow run ci.yml --ref main`.
