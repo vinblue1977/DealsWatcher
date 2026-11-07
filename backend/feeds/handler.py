@@ -149,6 +149,14 @@ def _is_quiet(table: Any, user: str, now: datetime) -> bool:
     return start <= hour < end if start < end else hour >= start or hour < end
 
 
+def _still_wanted(keyword: str, keywords: set[str]) -> bool:
+    """A stored deal keeps the keyword it matched under. It still counts when that keyword is enabled, or has since gained
+    exclusions ("TV" became "TV -mount": the app appends them), so deals waiting under the old text are not dropped.
+    """
+    keyword = keyword.casefold()
+    return keyword in keywords or any(k.startswith(f"{keyword} -") for k in keywords)
+
+
 def _unsent(table: Any, user: str, now: datetime, keywords: set[str]) -> list[dict[str, Any]]:
     """This user's stored deals whose alert has not gone out, newest first: new ones, ones held back (quiet hours) and ones
     whose push failed. Deals older than MAX_HELD_HOURS, and those whose keyword the user has since deleted or turned off
@@ -163,7 +171,7 @@ def _unsent(table: Any, user: str, now: datetime, keywords: set[str]) -> list[di
     }
     while True:
         page = table.query(**kwargs)
-        found += [i for i in page["Items"] if str(i.get("keyword", "")).casefold() in keywords]
+        found += [i for i in page["Items"] if _still_wanted(str(i.get("keyword", "")), keywords)]
         if "LastEvaluatedKey" not in page:
             break
         kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
