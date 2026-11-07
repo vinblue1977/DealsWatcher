@@ -41,7 +41,8 @@ export function setTheme(theme: Theme): void {
 
 /** Auto follows the phone while the app is open: call once at start. */
 export function watchTheme(): void {
-  matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+  // Older browsers lack addEventListener on media queries: Auto then follows the phone at the next start.
+  matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', () => {
     if (savedTheme() === 'auto') applyTheme('auto');
   });
 }

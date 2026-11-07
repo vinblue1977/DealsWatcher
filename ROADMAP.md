@@ -83,7 +83,7 @@ The watch list can hold product links, but nothing reads their prices yet, so wa
 ## App polish
 
 - [x] Quiet hours (Settings): a whole-hour window, read in the device's time zone (stored when notifications are turned on, and sent again each time the window is saved). Inside it deals are still saved, their alerts wait and go out when the window ends (as one summary push if there are more than 3); an alert held more than 24 hours is dropped. No time zone known means nothing is held
-- [x] Appearance (Settings): Dark (the default), Light, or Auto, which follows the phone's light/dark setting while the app is open. The choice is kept on the device (`localStorage`), not in the account, and also sets the browser bar colour. Colours are tokens in `frontend/src/styles.css`. Not checked on a real phone yet (the Home Screen status bar stays `black-translucent`)
+- [x] Appearance (Settings): Dark (the default), Light, or Auto, which follows the phone's light/dark setting while the app is open. The choice is kept on the device (`localStorage`), not in the account, and also sets the browser bar colour. Colours are tokens in `frontend/src/styles.css`. Not checked on a real phone yet. Known gap: the iPhone Home Screen status bar stays `black-translucent` (white clock and battery) and the launch splash stays dark, so Light looks poor in the status bar there; iOS reads those only at install time
 - [x] Rename a watch on the Detail screen (Name field above the price limit)
 - [x] Edit a keyword's highest price in the Keywords screen. Choosing feeds per keyword is not offered: Dealnews is the only live feed, so there is nothing to choose yet
 - [ ] Price-history chart on Detail (needs checker data)

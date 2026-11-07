@@ -13,9 +13,9 @@ export function Appearance() {
     <section class="group">
       <div class="setting">
         <span id="appearance-label">Appearance</span>
-        <div class="chips" role="radiogroup" aria-labelledby="appearance-label">
+        <div class="chips" role="group" aria-labelledby="appearance-label">
           {THEMES.map(({ value, label }) => (
-            <button key={value} type="button" role="radio" aria-checked={theme === value} class={theme === value ? 'chip on' : 'chip'} onClick={() => pick(value)}>
+            <button key={value} type="button" aria-pressed={theme === value} class={theme === value ? 'chip on' : 'chip'} onClick={() => pick(value)}>
               {label}
             </button>
           ))}
