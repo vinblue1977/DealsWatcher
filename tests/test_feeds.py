@@ -110,6 +110,14 @@ def xml_headers(content_type: str = "text/xml; charset=utf-8") -> Message:
     return headers
 
 
+class TestStillWanted:
+    def test_a_deal_survives_its_keyword_gaining_exclusions(self) -> None:
+        assert feeds._still_wanted("TV", {"tv"})
+        assert feeds._still_wanted("TV", {"tv -mount"})
+        assert not feeds._still_wanted("TV", {"tvs -mount", "laptop"})
+        assert not feeds._still_wanted("TV", set())
+
+
 class TestFetch:
     def test_returns_the_body_and_identifies_itself(self, monkeypatch: pytest.MonkeyPatch) -> None:
         seen = {}
