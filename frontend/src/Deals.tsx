@@ -139,7 +139,7 @@ export function Deals() {
   const sameText = (r: Rule) => r.keyword.toLowerCase() === undoDeal?.keyword?.toLowerCase();
   const undoRule = undoDeal?.keyword ? ((rules ?? []).find(sameText) ?? (rules ?? []).find((r) => r.keyword.toLowerCase().startsWith(`${undoDeal.keyword?.toLowerCase()} -`))) : undefined;
   const words = undoDeal && undoRule ? candidateWords(undoDeal.title ?? '', undoRule.keyword) : [];
-  const pickerOpen = picking && undo !== null && undoRule !== undefined; // if the rule disappears while picking, the plain bar comes back
+  const pickerOpen = picking && undo !== null && undoRule !== undefined && words.length > 0; // if the rule disappears while picking, the plain bar comes back
   useEffect(() => {
     if (undo === null || pickerOpen) return; // the word picker keeps the bar open
     const t = setTimeout(() => setUndo(null), 6000);
@@ -150,14 +150,15 @@ export function Deals() {
 
   const exclude = async (rule: Rule, word: string) => {
     const forDeal = undo; // the person may hide another deal while this saves
+    const say = (message: string) => undoNow.current === forDeal && setNote(message); // only while the bar is still this deal's
     setExcluding(true);
     try {
       // Read the rule again first: it may have changed on another device since the list loaded.
       const latest = (await api.rules()).find((r) => r.id === rule.id);
       if (!mounted.current) return;
-      if (!latest) return setNote('That keyword no longer exists.');
+      if (!latest) return say('That keyword no longer exists.');
       const keyword = withExclusion(latest.keyword, word);
-      if (keyword === null) return setNote('That keyword would be too long.');
+      if (keyword === null) return say('That keyword would be too long.');
       const updated = await api.editRule(rule.id, { keyword });
       if (!mounted.current) return;
       setRules((current) => (current ?? []).map((r) => (r.id === rule.id ? updated : r)));
@@ -166,7 +167,7 @@ export function Deals() {
       setPicking(false);
       setUndo(null);
     } catch (e) {
-      if (mounted.current) setNote((e as Error).message);
+      if (mounted.current) say((e as Error).message);
     } finally {
       if (mounted.current) setExcluding(false);
     }

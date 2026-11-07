@@ -71,7 +71,8 @@ def _found(phrase: str, text: str) -> bool:
 def excluded(keyword: str, text: str) -> bool:
     """The text mentions a word the keyword skips (`-word`)."""
     terms = parse_keyword(keyword)
-    return terms is not None and any(_found(p, text.casefold()) for p in terms.unwanted)
+    folded = text.casefold()
+    return terms is not None and any(_found(p, folded) for p in terms.unwanted)
 
 
 def matches(rule: dict[str, Any], deal: dict[str, Any], source: str) -> bool:

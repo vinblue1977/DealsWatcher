@@ -157,7 +157,7 @@ def _still_wanted(item: dict[str, Any], keywords: set[str]) -> bool:
     keyword = str(item.get("keyword", "")).casefold()
     if keyword in keywords:
         return True
-    text = " ".join(str(item[k]) for k in ("title", "retailer", "category") if item.get(k)).casefold()
+    text = " ".join(str(item[k]) for k in ("title", "retailer") if item.get(k)).casefold()
     for k in keywords:
         if k.startswith(f"{keyword} -"):
             if not excluded(k, text):
