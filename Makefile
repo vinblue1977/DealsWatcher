@@ -34,6 +34,7 @@ audit:              ## Check dependencies for known vulnerabilities
 
 frontend:           ## PWA: ESLint, TypeScript types, Vitest, Vite build and the size limit
 	cd frontend && npm run -s lint && npm run -s typecheck && npm run -s test && npm run -s build
+	scripts/check_dist.sh frontend/dist
 	scripts/check_size.sh frontend/dist
 	! grep -rnEi '#[0-9a-f]{3,8}\b|rgba?\(' frontend/src --include='*.tsx' --include='*.ts' || (echo 'Colours belong in styles.css tokens' && exit 1)
 	! grep -rlE 'mockData|/\?mock' frontend/dist || (echo 'Demo data leaked into the build' && exit 1)
