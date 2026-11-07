@@ -162,7 +162,7 @@ class TestFetch:
             "https://www.dealnews.com/?rss=1",
             "https://www.dealnews.com/f1676/Black-Friday/?rss=1",
             "https://www.dealnews.com/?rss=1&sort=hotness",
-            "https://www.dealnews.com/f1682/Creator-Pick/?rss=1",
+            "https://www.dealnews.com/f1682/Creator-Pick/?rss=1&sort=time",
             "https://www.dealnews.com/c142/Electronics/?rss=1",
             "https://www.dealnews.com/c39/Computers/?rss=1",
             "https://www.dealnews.com/c202/Clothing-Accessories/?rss=1",

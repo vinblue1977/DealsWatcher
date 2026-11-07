@@ -17,7 +17,7 @@ from xml.etree import ElementTree  # noqa: S405 - bodies with a DOCTYPE or ENTIT
 MAIN_FEED = "https://www.dealnews.com/?rss=1"  # the latest deals
 BLACK_FRIDAY_FEED = "https://www.dealnews.com/f1676/Black-Friday/?rss=1"  # store-wide sales, mostly without a price
 MOST_POPULAR_FEED = "https://www.dealnews.com/?rss=1&sort=hotness"
-CREATOR_PICK_FEED = "https://www.dealnews.com/f1682/Creator-Pick/?rss=1"  # editors' choice (was Staff-Pick)
+CREATOR_PICK_FEED = "https://www.dealnews.com/f1682/Creator-Pick/?rss=1&sort=time"  # editors' choice
 ELECTRONICS_FEED = "https://www.dealnews.com/c142/Electronics/?rss=1"
 COMPUTERS_FEED = "https://www.dealnews.com/c39/Computers/?rss=1"
 CLOTHING_FEED = "https://www.dealnews.com/c202/Clothing-Accessories/?rss=1"
