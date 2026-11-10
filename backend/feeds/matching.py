@@ -23,6 +23,12 @@ class Terms(NamedTuple):
     unwanted: tuple[str, ...]  # phrases that must not appear
 
 
+def _split_star(keyword: str) -> tuple[bool, str]:
+    """Whether the keyword starts with `*` (any order), and the keyword without its leading stars."""
+    text = keyword.lstrip()
+    return text.startswith("*"), text.lstrip("*")
+
+
 @functools.lru_cache(maxsize=512)  # the same few keywords are read for every deal of every run
 def parse_keyword(keyword: str) -> Terms | None:
     """The phrases a keyword asks for and rules out, or None when it can't be read: an unclosed or empty quote, or nothing to
@@ -30,10 +36,7 @@ def parse_keyword(keyword: str) -> Terms | None:
     wanted: list[str] = []
     unwanted: list[str] = []
     plain: list[str] = []
-    text = keyword.casefold().translate(_CURLY_QUOTES)
-    any_order = text.lstrip().startswith("*")
-    if any_order:
-        text = text.lstrip()[1:]
+    any_order, text = _split_star(keyword.casefold().translate(_CURLY_QUOTES))
     for match in _TOKEN.finditer(text):
         dash, quoted, word = match.groups()
         if word is None:  # a quoted phrase, with or without a leading dash
@@ -57,7 +60,7 @@ _EXCLUSION = re.compile(r'-"[^"]*"|(?<!\S)-[^\W\d_]\S*')
 
 def label(keyword: str) -> str:
     """A keyword as people read it: without its `-exclusions` and quote marks (`TV -mount "Pro Max"` reads `TV Pro Max`)."""
-    text = _EXCLUSION.sub("", keyword.lstrip().removeprefix("*")).replace('"', "")
+    text = _EXCLUSION.sub("", _split_star(keyword)[1]).replace('"', "")
     return " ".join(text.split()) or keyword
 
 
@@ -92,5 +95,5 @@ def matches(rule: dict[str, Any], deal: dict[str, Any], source: str) -> bool:
         return False
     text = " ".join(part for part in (deal["title"], deal.get("retailer"), deal.get("category")) if part).casefold()
     # A keyword that can't be read (only exclusions, say, saved by hand) still works as one plain phrase.
-    terms = parse_keyword(rule["keyword"]) or Terms((" ".join(rule["keyword"].casefold().split()),), ())
+    terms = parse_keyword(rule["keyword"]) or Terms((" ".join(_split_star(rule["keyword"])[1].casefold().split()),), ())
     return all(_found(p, text) for p in terms.wanted) and not any(_found(p, text) for p in terms.unwanted)

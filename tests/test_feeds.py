@@ -258,6 +258,8 @@ class TestMatching:
             ('*rolling "duffel bag"', "Bag Duffel Rolling", False),
             ('*rolling "duffel bag"', "Duffel Bag, Rolling", True),
             ("rolling duffel bag", "Duffel Bag Rolling", False),
+            ("** rolling bag", "Bag Rolling", True),
+            ("*-case", "Phone -case", True),
         ],
     )
     def test_a_leading_star_matches_the_words_in_any_order(self, keyword: str, title: str, expected: bool) -> None:
