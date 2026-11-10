@@ -131,7 +131,7 @@ export function Keywords() {
           </button>
         </div>
         <p class="muted small hint">
-          Skip deals with a word: TV -mount. Need an exact phrase: “Pro Max”.
+          Skip deals with a word: TV -mount. Need an exact phrase: “Pro Max”. Words in any order: *rolling duffel bag.
         </p>
         <label class="sr" for="kwmax">
           Highest price (optional)
