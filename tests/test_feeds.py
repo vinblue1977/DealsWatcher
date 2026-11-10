@@ -1265,6 +1265,15 @@ class TestProducts:
         assert [s["price"] for s in sightings_of(table)] == [Decimal("250.00")]  # the priced, matching, not-excluded deal
         assert sightings_of(table, pid="p2") == []  # paused
 
+    def test_a_star_name_finds_the_words_in_any_order(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
+        add_product(table, name="*headphones sony wh-1000xm5")
+        run(
+            monkeypatch,
+            item("1", title="Sony WH-1000XM5 Headphones", price="250.00"),
+            item("2", title="Sony Speaker", price="90.00"),
+        )
+        assert [s["price"] for s in sightings_of(table)] == [Decimal("250.00")]
+
     def test_each_user_has_their_own_prices(self, table: Any, pushes: list, monkeypatch: pytest.MonkeyPatch) -> None:
         add_product(table, lowestPrice=Decimal("300.00"))
         add_product(table, user="someone-else", lowestPrice=Decimal("100.00"))

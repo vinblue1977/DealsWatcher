@@ -545,6 +545,8 @@ def test_the_same_product_cannot_be_tracked_twice_but_another_user_can() -> None
     add_product(name="Sony WH-1000XM5")
     assert call("POST /me/watches", {"name": "wh-1000xm5  SONY"})[0] == 201  # plain words are one ordered phrase: another product
     assert call("POST /me/watches", {"name": "sony wh-1000xm5"})[0] == 400
+    assert call("POST /me/watches", {"name": "*sony xm5"})[0] == 201
+    assert call("POST /me/watches", {"name": "* XM5  Sony"})[0] == 400  # a star name is the same product in any word order
     assert call("POST /me/watches", {"name": "Sony WH-1000XM5"}, user=OTHER)[0] == 201
 
 
