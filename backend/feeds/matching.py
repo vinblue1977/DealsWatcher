@@ -2,6 +2,7 @@
 
 Keyword syntax (a plain keyword, with none of the marks below, is one phrase, as it always was):
 - `OLED TV`: the words next to each other, in that order.
+- `*rolling duffel bag`: a leading `*` asks for the plain words in any order, anywhere in the deal (each is its own phrase).
 - `"Pro Max" -case`: quoted phrases must each appear anywhere in the deal; `-word` or `-"two words"` must not appear.
 - `TV -mount -"wall mount"`: the plain words (`TV`) are one phrase, the exclusions rule deals out. A `-` only marks an
   exclusion before a letter (`-15` and `-5%` are plain text), and a quote only opens a phrase at the start of a word
@@ -29,7 +30,11 @@ def parse_keyword(keyword: str) -> Terms | None:
     wanted: list[str] = []
     unwanted: list[str] = []
     plain: list[str] = []
-    for match in _TOKEN.finditer(keyword.casefold().translate(_CURLY_QUOTES)):
+    text = keyword.casefold().translate(_CURLY_QUOTES)
+    any_order = text.lstrip().startswith("*")
+    if any_order:
+        text = text.lstrip()[1:]
+    for match in _TOKEN.finditer(text):
         dash, quoted, word = match.groups()
         if word is None:  # a quoted phrase, with or without a leading dash
             phrase = " ".join(quoted.split())
@@ -43,7 +48,7 @@ def parse_keyword(keyword: str) -> Terms | None:
         else:
             plain.append(word)
     if plain:
-        wanted.insert(0, " ".join(plain))
+        wanted[:0] = plain if any_order else [" ".join(plain)]
     return Terms(tuple(wanted), tuple(unwanted)) if wanted else None
 
 
@@ -52,7 +57,8 @@ _EXCLUSION = re.compile(r'-"[^"]*"|(?<!\S)-[^\W\d_]\S*')
 
 def label(keyword: str) -> str:
     """A keyword as people read it: without its `-exclusions` and quote marks (`TV -mount "Pro Max"` reads `TV Pro Max`)."""
-    return " ".join(_EXCLUSION.sub("", keyword).replace('"', "").split()) or keyword
+    text = _EXCLUSION.sub("", keyword.lstrip().removeprefix("*")).replace('"', "")
+    return " ".join(text.split()) or keyword
 
 
 def same_keyword(a: str, b: str) -> bool:

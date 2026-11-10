@@ -245,6 +245,30 @@ class TestMatching:
     def test_whole_words_in_title_store_or_category(self, keyword: str, expected: bool) -> None:
         assert matches(rule(keyword=keyword), DEAL, "dealnews") is expected
 
+    @pytest.mark.parametrize(
+        ("keyword", "title", "expected"),
+        [
+            ("*rolling duffel bag", "Samsonite Rolling Duffel Bag 28in", True),
+            ("*rolling duffel bag", "Duffel Bag Rolling, Wheeled", True),
+            ("*rolling duffel bag", "Wheeled Rolling Duffel Bags", True),
+            ("*rolling duffel bag", "Rolling Backpack", False),
+            ("*rolling duffel bag", "Duffel Bag 40L", False),
+            ("*rolling duffel bag", "Rollingstone Duffel Bag", False),
+            ("*rolling duffel bag -backpack", "Rolling Duffel Bag Backpack Combo", False),
+            ('*rolling "duffel bag"', "Bag Duffel Rolling", False),
+            ('*rolling "duffel bag"', "Duffel Bag, Rolling", True),
+            ("rolling duffel bag", "Duffel Bag Rolling", False),
+        ],
+    )
+    def test_a_leading_star_matches_the_words_in_any_order(self, keyword: str, title: str, expected: bool) -> None:
+        assert matches(rule(keyword=keyword), {**DEAL, "title": title}, "dealnews") is expected
+
+    def test_a_star_keyword_is_the_same_rule_in_any_order_and_differs_from_a_phrase(self) -> None:
+        assert feeds_matching.same_keyword("*rolling duffel bag", "* bag Duffel ROLLING")
+        assert feeds_matching.same_keyword("*rolling duffel", '"duffel" "rolling"')
+        assert not feeds_matching.same_keyword("*rolling duffel", "rolling duffel")
+        assert feeds_matching.label("*rolling duffel bag -backpack") == "rolling duffel bag"
+
     def test_es_plurals_match_too(self) -> None:
         assert matches(rule(keyword="box"), {**DEAL, "title": "Storage Boxes for $20"}, "dealnews")
         assert not matches(rule(keyword="box"), {**DEAL, "title": "Boxer shorts"}, "dealnews")
