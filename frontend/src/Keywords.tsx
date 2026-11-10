@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { api, ApiError } from './api';
 import { parseMaxPrice, ruleLine } from './format';
 import { SwitchButton } from './Switch';
-import type { Rule } from './types';
+import type { Rule, RulePatch } from './types';
 
 const focusOnMount = (el: HTMLInputElement | null) => el?.focus(); // a stable function, so it runs once when the field appears
 
@@ -16,6 +16,7 @@ export function Keywords() {
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<{ id: string; kind: 'edit' | 'remove' } | null>(null); // one row at a time
   const [draft, setDraft] = useState('');
+  const [draftWord, setDraftWord] = useState('');
   const returnFocusTo = useRef('');
   const [attempt, setAttempt] = useState(0);
 
@@ -30,7 +31,7 @@ export function Keywords() {
     };
   }, [attempt]);
 
-  /** Closes the edit or remove prompt and puts keyboard focus back on the row's Edit price button. */
+  /** Closes the edit or remove prompt and puts keyboard focus back on the row's Edit button. */
   const close = () => {
     if (mode) returnFocusTo.current = mode.id;
     setMode(null);
@@ -84,16 +85,23 @@ export function Keywords() {
   const startEdit = (rule: Rule) => {
     setError('');
     setDraft(rule.maxPrice === null ? '' : String(rule.maxPrice));
+    setDraftWord(rule.keyword);
     setMode({ id: rule.id, kind: 'edit' });
   };
 
   const saveEdit = (e: Event, rule: Rule) => {
     e.preventDefault();
+    const keyword = draftWord.trim();
+    if (!keyword) return setError('The keyword cannot be empty.');
+    if ((rules ?? []).some((r) => r.id !== rule.id && r.keyword.toLowerCase() === keyword.toLowerCase())) return setError('You already have this keyword.');
     const maxPrice = parseMaxPrice(draft);
     if (maxPrice === undefined) return setError('Enter the highest price like 200 or 199.99, or leave it empty for any price.');
-    if (maxPrice === rule.maxPrice) return close(); // nothing changed: no request
+    const patch: RulePatch = {};
+    if (keyword !== rule.keyword) patch.keyword = keyword;
+    if (maxPrice !== rule.maxPrice) patch.maxPrice = maxPrice;
+    if (Object.keys(patch).length === 0) return close(); // nothing changed: no request
     void run(async () => {
-      const updated = await api.editRule(rule.id, { maxPrice });
+      const updated = await api.editRule(rule.id, patch);
       setRules((current) => (current ?? []).map((r) => (r.id === rule.id ? updated : r)));
       close();
     }, rule.id);
@@ -162,14 +170,23 @@ export function Keywords() {
               <div class={rule.enabled ? 'keyword' : 'keyword faint'}>{rule.keyword}</div>
               <div class="muted small">{ruleLine(rule)}</div>
               {mode?.id === rule.id && mode.kind === 'edit' ? (
-                <form class="row confirm" onSubmit={(e) => saveEdit(e, rule)}>
-                  <input ref={focusOnMount} class="text" inputMode="decimal" autoComplete="off" maxLength={9} placeholder="Any price" aria-label={`Highest price for ${rule.keyword}`} disabled={busy} value={draft} onInput={typing(setDraft)} />
-                  <button class="button" type="button" disabled={busy} onClick={close}>
-                    Cancel
-                  </button>
-                  <button class="button primary" type="submit" disabled={busy}>
-                    Save
-                  </button>
+                <form class="editform" onSubmit={(e) => saveEdit(e, rule)}>
+                  <label class="muted small" for={`kw-${rule.id}`}>
+                    Keyword
+                  </label>
+                  <input id={`kw-${rule.id}`} ref={focusOnMount} class="text" autoComplete="off" autoCapitalize="off" autoCorrect="off" spellcheck={false} maxLength={60} disabled={busy} value={draftWord} onInput={typing(setDraftWord)} />
+                  <label class="muted small" for={`px-${rule.id}`}>
+                    Highest price (empty for any)
+                  </label>
+                  <input id={`px-${rule.id}`} class="text" inputMode="decimal" autoComplete="off" maxLength={9} placeholder="Any price" disabled={busy} value={draft} onInput={typing(setDraft)} />
+                  <div class="row confirm">
+                    <button class="button" type="button" disabled={busy} onClick={close}>
+                      Cancel
+                    </button>
+                    <button class="button primary" type="submit" disabled={busy || !draftWord.trim()}>
+                      Save
+                    </button>
+                  </div>
                 </form>
               ) : mode?.id === rule.id ? (
                 <div class="row confirm">
@@ -182,8 +199,8 @@ export function Keywords() {
                 </div>
               ) : (
                 <div class="row actions">
-                  <button id={`edit-${rule.id}`} class="textbutton" type="button" disabled={busy} onClick={() => startEdit(rule)} aria-label={`Edit highest price for ${rule.keyword}`}>
-                    Edit price
+                  <button id={`edit-${rule.id}`} class="textbutton" type="button" disabled={busy} onClick={() => startEdit(rule)} aria-label={`Edit ${rule.keyword}`}>
+                    Edit
                   </button>
                   <button class="textbutton" type="button" disabled={busy} onClick={() => setMode({ id: rule.id, kind: 'remove' })} aria-label={`Remove ${rule.keyword}`}>
                     Remove
