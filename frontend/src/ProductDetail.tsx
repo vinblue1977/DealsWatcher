@@ -51,7 +51,7 @@ export function ProductDetail({ product, back, onChange }: { product: Product; b
       <header class="top">{back}</header>
 
       <div>
-        <h1 class="small-title">{product.title}</h1>
+        <h1 class="small-title">{product.name}</h1>
         <div class="muted small">Prices come from deals the feeds list, not live store prices.</div>
       </div>
 

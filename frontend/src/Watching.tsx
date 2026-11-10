@@ -15,7 +15,7 @@ function Card({ watch }: { watch: Watch }) {
       <a class="card" href={`#/watch/${watch.id}`}>
       <div class="badge">{store ? initials(store) : '·'}</div>
       <div class="grow">
-        <div class="title">{watch.title}</div>
+        <div class="title">{product ? watch.name : watch.title}</div>
         <span class={`pill ${state.tone}`}>{state.label}</span>
       </div>
       <div class="price">
