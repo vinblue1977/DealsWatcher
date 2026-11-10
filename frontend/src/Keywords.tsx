@@ -31,7 +31,7 @@ export function Keywords() {
     };
   }, [attempt]);
 
-  /** Closes the edit or remove prompt and puts keyboard focus back on the row's Edit price button. */
+  /** Closes the edit or remove prompt and puts keyboard focus back on the row's Edit button. */
   const close = () => {
     if (mode) returnFocusTo.current = mode.id;
     setMode(null);
@@ -93,6 +93,7 @@ export function Keywords() {
     e.preventDefault();
     const keyword = draftWord.trim();
     if (!keyword) return setError('The keyword cannot be empty.');
+    if ((rules ?? []).some((r) => r.id !== rule.id && r.keyword.toLowerCase() === keyword.toLowerCase())) return setError('You already have this keyword.');
     const maxPrice = parseMaxPrice(draft);
     if (maxPrice === undefined) return setError('Enter the highest price like 200 or 199.99, or leave it empty for any price.');
     const patch: RulePatch = {};
@@ -170,8 +171,14 @@ export function Keywords() {
               <div class="muted small">{ruleLine(rule)}</div>
               {mode?.id === rule.id && mode.kind === 'edit' ? (
                 <form class="editform" onSubmit={(e) => saveEdit(e, rule)}>
-                  <input ref={focusOnMount} class="text" autoComplete="off" autoCapitalize="off" autoCorrect="off" spellcheck={false} maxLength={60} placeholder="Keyword" aria-label={`Keyword for ${rule.keyword}`} disabled={busy} value={draftWord} onInput={typing(setDraftWord)} />
-                  <input class="text" inputMode="decimal" autoComplete="off" maxLength={9} placeholder="Any price" aria-label={`Highest price for ${rule.keyword}`} disabled={busy} value={draft} onInput={typing(setDraft)} />
+                  <label class="muted small" for={`kw-${rule.id}`}>
+                    Keyword
+                  </label>
+                  <input id={`kw-${rule.id}`} ref={focusOnMount} class="text" autoComplete="off" autoCapitalize="off" autoCorrect="off" spellcheck={false} maxLength={60} disabled={busy} value={draftWord} onInput={typing(setDraftWord)} />
+                  <label class="muted small" for={`px-${rule.id}`}>
+                    Highest price (empty for any)
+                  </label>
+                  <input id={`px-${rule.id}`} class="text" inputMode="decimal" autoComplete="off" maxLength={9} placeholder="Any price" disabled={busy} value={draft} onInput={typing(setDraft)} />
                   <div class="row confirm">
                     <button class="button" type="button" disabled={busy} onClick={close}>
                       Cancel
