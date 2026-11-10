@@ -43,7 +43,7 @@ export function AddProduct() {
       <div class="field">
         <label for="name">Product name</label>
         <input id="name" class="text" autoComplete="off" maxLength={60} placeholder="e.g. Sony WH-1000XM5" value={name} onInput={(e) => setName(e.currentTarget.value)} />
-        <div class="muted small">Use the exact name: a deal must contain every word, in this order. Add -words to skip other models, e.g. XM5 -XM4.</div>
+        <div class="muted small">Use the exact name: a deal must contain every word, in this order. Start with * for any order (*sony xm5). Add -words to skip other models, e.g. XM5 -XM4.</div>
       </div>
 
       <div class="field">
