@@ -1,0 +1,38 @@
+name: Dependabot merge
+
+# Dependabot rebases only on conflicts, and never turns on auto-merge. This keeps its PRs moving:
+# it enables squash auto-merge on each open Dependabot PR and brings any that fell behind main up to date.
+# It needs a PAT: pushes and merges made with GITHUB_TOKEN don't start other workflows, so the updated PR's
+# required checks would never run and the merge's deploy would be skipped.
+on:
+  push:
+    branches: [main]  # a merge just made the other PRs fall behind
+  schedule:
+    - cron: "17 * * * *"  # hourly, to pick up newly opened Dependabot PRs
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Enable auto-merge and update branches
+        env:
+          GH_TOKEN: ${{ secrets.DEPENDABOT_MERGE_TOKEN }}  # fine-grained PAT: Contents + Pull requests write
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then echo "::error::DEPENDABOT_MERGE_TOKEN secret is not set"; exit 1; fi
+          # Only PRs opened by Dependabot; never the owner's own PRs.
+          gh pr list --author "app/dependabot" --state open --json number,mergeStateStatus \
+            --jq '.[] | "\(.number) \(.mergeStateStatus)"' |
+          while read -r number state; do
+            echo "#$number is $state"
+            gh pr merge "$number" --auto --squash
+            if [ "$state" = BEHIND ]; then gh pr update-branch "$number"; fi
+          done
