@@ -1,0 +1,44 @@
+name: Dependabot merge
+
+# Dependabot rebases only on conflicts, and never turns on auto-merge. This keeps its PRs moving:
+# it enables squash auto-merge on each open Dependabot PR and asks Dependabot to rebase any that fell behind main
+# (a rebase keeps Dependabot able to manage the PR, and Dependabot's push starts the checks).
+# It needs a PAT: auto-merge and comments made with GITHUB_TOKEN don't start other workflows, so the merge's
+# deploy would be skipped.
+on:
+  push:
+    branches: [main]  # a merge just made the other PRs fall behind
+  schedule:
+    - cron: "17 13 * * *"  # daily, to pick up newly opened Dependabot PRs
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Enable auto-merge and request rebases
+        env:
+          GH_TOKEN: ${{ secrets.DEPENDABOT_MERGE_TOKEN }}  # fine-grained PAT: Contents + Pull requests write
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then echo "::notice::DEPENDABOT_MERGE_TOKEN secret is not set; skipping"; exit 0; fi
+          sleep 30  # after a push to main GitHub is still working out which PRs are behind
+          # Only PRs opened by Dependabot; never the owner's own PRs. A failure on one PR must not stop the rest.
+          gh pr list --author "app/dependabot" --state open --json number,mergeStateStatus,autoMergeRequest \
+            --jq '.[] | "\(.number) \(.mergeStateStatus) \(.autoMergeRequest != null)"' |
+          while read -r number state auto; do
+            echo "#$number is $state, auto-merge $auto"
+            if [ "$auto" = false ]; then
+              gh pr merge "$number" --auto --squash || echo "::warning::could not enable auto-merge on #$number"
+            fi
+            if [ "$state" = BEHIND ]; then
+              gh pr comment "$number" --body "@dependabot rebase" || echo "::warning::could not comment on #$number"
+            fi
+          done
