@@ -59,6 +59,7 @@ class Feeds(Construct):
         NagSuppressions.add_resource_suppressions(
             fn,
             [
+                NagPackSuppression(id="AwsSolutions-L1", reason="3.15 is preview only"),  # remove once 3.15 is GA
                 NagPackSuppression(
                     id="AwsSolutions-IAM4",
                     reason="Basic execution role only writes this function's logs",

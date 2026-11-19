@@ -303,6 +303,7 @@ class Web(Construct):
         NagSuppressions.add_resource_suppressions(
             fn,
             [
+                reason("AwsSolutions-L1", "3.15 is preview only"),  # remove once 3.15 is GA
                 reason("AwsSolutions-IAM4", "Basic execution role only writes this function's logs", [logs_policy]),
                 reason(
                     "AwsSolutions-IAM5",
