@@ -1,6 +1,6 @@
 # Working in this repo
 
-**Deploys are disabled** (`deploy` job is `if: false` in `ci.yml`; the stack was deleted 2026-11-27 while the app is on hold). Ignore the deploy/push-run rules below until it is restored.
+**Deploys are disabled** (the `deploy` job in `ci.yml` needs the repo variable `DEPLOY_ENABLED=true`, unset now; the stack was deleted 2026-11-27 while the app is on hold). Ignore the deploy/push-run rules below until it is restored.
 
 ## Pull requests
 
