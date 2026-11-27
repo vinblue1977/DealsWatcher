@@ -1,5 +1,7 @@
 # Working in this repo
 
+**Deploys are disabled** (the `deploy` job in `ci.yml` needs the repo variable `DEPLOY_ENABLED=true`, unset now; the stack was deleted 2026-11-27 while the app is on hold). Ignore the deploy/push-run rules below until it is restored.
+
 ## Pull requests
 
 - Before starting new work, run `gh pr list`. If a PR is open, get it merged first (fix conflicts or failing checks, `gh pr update-branch <n>`, wait for the merge), then `git pull` main.

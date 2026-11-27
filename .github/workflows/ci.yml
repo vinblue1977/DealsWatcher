@@ -238,7 +238,11 @@ jobs:
 
   deploy:
     needs: changes
-    if: needs.changes.outputs.deploy == 'true'
+    # Disabled: the DealsWatcher stack was deleted on 2026-11-27 (the app is on hold). The repo variable
+    # DEPLOY_ENABLED is unset, so this skips; set it to 'true' and re-create the stack (cdk deploy) to bring it back.
+    # The `changes` job above is unused meanwhile, and these deploy steps are not exercised: run them once
+    # (workflow_dispatch on main) before relying on them again.
+    if: vars.DEPLOY_ENABLED == 'true' && needs.changes.outputs.deploy == 'true'
     concurrency:
       group: deploy-production
       cancel-in-progress: false
